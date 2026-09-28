@@ -7,15 +7,30 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vivu.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "VIVU cần quyền truy cập vị trí để gợi ý các địa điểm ăn uống, vui chơi sạch và check-in nhận Điểm Uy Tín.",
+        "NSCameraUsageDescription": "VIVU cần quyền truy cập máy ảnh để bạn tải ảnh đại diện và đánh giá địa điểm thực tế.",
+        "NSPhotoLibraryUsageDescription": "VIVU cần quyền truy cập thư viện ảnh để chia sẻ ảnh trải nghiệm trên bản đồ và bảng tin."
+      }
     },
     "android": {
+      "package": "com.vivu.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#6366F1",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
