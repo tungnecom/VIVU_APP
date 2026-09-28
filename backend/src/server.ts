@@ -54,11 +54,14 @@ app.get('/health', (req, res) => {
   });
 });
 
+import { crawlerRouter } from './modules/crawler/crawler.routes';
+
 // 5. Mount API Routes
 app.use('/api/auth', authRouter);
 app.use('/api/feed', feedRouter);
 app.use('/api/activities', activitiesRouter);
 app.use('/api/ai', viviRouter);
+app.use('/api/crawler', crawlerRouter);
 
 // 6. Global Centralized Error Handler
 app.use(errorHandler);

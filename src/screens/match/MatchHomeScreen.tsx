@@ -105,9 +105,79 @@ export const MatchHomeScreen: React.FC<MatchHomeProps> = ({ onNavigate }) => {
           })}
         </ScrollView>
 
+        {/* AI Matchmaking Candidate Section */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.aiTitleRow}>
+            <Ionicons name="sparkles" size={18} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>Ghép cạ AI (Matchmaking)</Text>
+          </View>
+          <Text style={styles.aiBadgeText}>Độ tương thích cao</Text>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.aiCandidatesScroll}
+        >
+          {[
+            {
+              id: 'u1',
+              name: 'Minh Thư',
+              avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+              match: 96,
+              trustScore: 94,
+              reason: 'Cùng mê Food & Cafe',
+              dist: '1.2 km',
+            },
+            {
+              id: 'u2',
+              name: 'Quang Anh',
+              avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+              match: 92,
+              trustScore: 88,
+              reason: 'Cùng mê Phượt & Hoàng hôn',
+              dist: '2.5 km',
+            },
+            {
+              id: 'u3',
+              name: 'Lan Anh',
+              avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
+              match: 90,
+              trustScore: 92,
+              reason: 'Cùng mê Cafe & Checkin',
+              dist: '3.0 km',
+            },
+          ].map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={styles.candidateCard}
+              activeOpacity={0.85}
+              onPress={() => onNavigate('personal_chat')}
+            >
+              <View style={styles.candidateAvatarWrap}>
+                <Image source={{ uri: c.avatar }} style={styles.candidateAvatar} />
+                <View style={styles.matchPill}>
+                  <Text style={styles.matchPillText}>{c.match}%</Text>
+                </View>
+              </View>
+
+              <Text style={styles.candidateName}>{c.name}</Text>
+              <Text style={styles.candidateReason}>{c.reason}</Text>
+              <Text style={styles.candidateDist}>📍 Cách {c.dist}</Text>
+
+              <TouchableOpacity
+                style={styles.chatCandidateBtn}
+                onPress={() => onNavigate('personal_chat')}
+              >
+                <Text style={styles.chatCandidateText}>Bắt chuyện</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         {/* Section Header */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Gợi ý dành cho bạn</Text>
+          <Text style={styles.sectionTitle}>Hoạt động &amp; Chuyến đi</Text>
           <TouchableOpacity onPress={() => onNavigate('home_feed')}>
             <Text style={styles.seeMoreText}>Xem thêm &gt;</Text>
           </TouchableOpacity>
@@ -466,4 +536,86 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  aiTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  aiBadgeText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  aiCandidatesScroll: {
+    paddingHorizontal: 20,
+    gap: 12,
+    paddingBottom: 6,
+  },
+  candidateCard: {
+    width: 140,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#EEEEF2',
+    ...SHADOWS.sm,
+  },
+  candidateAvatarWrap: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  candidateAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  matchPill: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  matchPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  candidateName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textDark,
+    marginBottom: 2,
+  },
+  candidateReason: {
+    fontSize: 11,
+    color: COLORS.textMedium,
+    textAlign: 'center',
+    marginBottom: 4,
+    height: 28,
+  },
+  candidateDist: {
+    fontSize: 10,
+    color: COLORS.textLight,
+    marginBottom: 8,
+  },
+  chatCandidateBtn: {
+    backgroundColor: COLORS.primarySoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  chatCandidateText: {
+    color: COLORS.primaryDark,
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });
+
