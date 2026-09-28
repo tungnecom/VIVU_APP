@@ -9,16 +9,17 @@
 2. [KIẾN TRÚC HỆ THỐNG & TECH STACK](#2-kiến-trúc-hệ-thống--tech-stack)
 3. [KIẾN TRÚC CHỊU TẢI 10.000 CCU & CƠ SỞ DỮ LIỆU](#3-kiến-trúc-chịu-tải-10000-ccu--cơ-sở-dữ-liệu)
 4. [HỆ THỐNG THUẬT TOÁN AI CỐT LÕI](#4-hệ-thống-thuật-toán-ai-cốt-lõi)
-5. [PHÂN RÃ CÔNG VIỆC CHI TIẾT (WBS) & TIẾN ĐỘ 8 TUẦN](#5-phân-rã-công-việc-chi-tiết-wbs--tiến-độ-8-tuần)
-6. [MA TRẬN QUẢN TRỊ RỦI RO & BẢO MẬT](#6-ma-trận-quản-trị-rủi-ro--bảo-mật)
-7. [BỘ CHỈ SỐ ĐO LƯỜNG HIỆU QUẢ (KPIS) & NGHIỆM THU](#7-bộ-chỉ-số-đo-lường-hiệu-quả-kpis--nghiệm-thu)
+5. [HỆ THỐNG CÀO DỮ LIỆU & LÀM SẠCH ĐỊA ĐIỂM (ZERO-GARBAGE DATA ENGINE)](#5-hệ-thống-cào-dữ-liệu--làm-sạch-địa-điểm-zero-garbage-data-engine)
+6. [PHÂN RÃ CÔNG VIỆC CHI TIẾT (WBS) & TIẾN ĐỘ 8 TUẦN](#6-phân-rã-công-việc-chi-tiết-wbs--tiến-độ-8-tuần)
+7. [MA TRẬN QUẢN TRỊ RỦI RO & BẢO MẬT](#7-ma-trận-quản-trị-rủi-ro--bảo-mật)
+8. [BỘ CHỈ SỐ ĐO LƯỜNG HIỆU QUẢ (KPIS) & NGHIỆM THU](#8-bộ-chỉ-số-đo-lường-hiệu-quả-kpis--nghiệm-thu)
 
 ---
 
 ## 1. TỔNG QUAN DỰ ÁN
 
 ### 1.1. Sứ mệnh sản phẩm
-**VIVU** giải quyết bài toán "muốn đi chơi/trải nghiệm nhưng không có cạ cứng" của giới trẻ (Gen Z, Millennials). Nền tảng kết nối những người có cùng sở thích (Ẩm thực, Phượt, Cafe, Cắm trại, Chụp ảnh...) tại các thành phố du lịch (Đà Nẵng, Hội An, Hà Nội, TP.HCM...), loại bỏ cảm giác ngượng ngùng khi làm quen bằng Trợ lý AI ViVi và bảo vệ an toàn cho thành viên bằng **Hệ thống Điểm Uy Tín (Trust Score 0-100)**.
+**VIVU** giải quyết bài toán "muốn đi chơi/trải nghiệm nhưng không có cạ cứng" của giới trẻ (Gen Z, Millennials). Nền tảng kết nối những người có cùng sở thích (Ẩm thực, Phượt, Cafe, Cắm trại, Chụp ảnh...) tất cả mọi nơi trên đất, loại bỏ cảm giác ngượng ngùng khi làm quen bằng Trợ lý AI ViVi và bảo vệ an toàn cho thành viên bằng **Hệ thống Điểm Uy Tín (Trust Score 0-100)**.
 
 ### 1.2. Hiện trạng dự án
 - ✅ **Frontend Mobile**: Đã hoàn thành 100% thiết kế giao diện tương tác gồm **28 màn hình chuẩn Figma** bằng React Native (Expo SDK 57 & TypeScript).
@@ -136,7 +137,69 @@ $$S_{match} = 40\% \cdot \text{Sim}_{interest} + 20\% \cdot \text{Sim}_{social} 
 
 ---
 
-## 5. PHÂN RÃ CÔNG VIỆC CHI TIẾT (WBS) & TIẾN ĐỘ 8 TUẦN
+## 5. HỆ THỐNG CÀO DỮ LIỆU & LÀM SẠCH ĐỊA ĐIỂM (ZERO-GARBAGE DATA ENGINE)
+
+> [!IMPORTANT]
+> **Cam kết chất lượng dữ liệu phục vụ 10.000 người dùng**: Kho dữ liệu địa điểm du lịch, ẩm thực, check-in của VIVU phải đảm bảo **chính xác 100%, không dữ liệu rác, không quán ảo/ma, không tọa độ sai lệch, và không ảnh lỗi**.
+
+```mermaid
+flowchart TD
+    subgraph DataSources ["1. Nguồn Dữ Liệu Gốc"]
+        WIKI["Wikimedia / Wikidata SPARQL\n(Di tích, Bãi biển, Đèo núi, Lịch sử, Ảnh Commons)"]
+        TRAVEL["Traveloka / Travel Portals\n(Quán ăn, Cafe, Vui chơi, Giờ mở cửa, Giá vé, Review)"]
+    end
+
+    subgraph Pipeline ["2. Đường Ống Làm Sạch 5 Tầng (Zero-Garbage Pipeline)"]
+        S1["Tầng 1: Khử trùng ký tự rác & Chuẩn hóa UTF-8"]
+        S2["Tầng 2: Xác thực GPS & Geofence ranh giới thành phố"]
+        S3["Tầng 3: Khử trùng lặp (Jaro-Winkler + Khoảng cách < 50m)"]
+        S4["Tầng 4: AI Verification (Quét trạng thái hoạt động thực tế)"]
+        S5["Tầng 5: Kiểm duyệt ảnh HD (Check HTTP 200, WebP CDN)"]
+        
+        WIKI & TRAVEL --> S1 --> S2 --> S3 --> S4 --> S5
+    end
+
+    subgraph CleanDB ["3. Kho Dữ Liệu Sạch (Production Ready)"]
+        PG["PostgreSQL Master + pgvector\n(Thông tin chuẩn, HNSW Vector Index)"]
+        REDIS["Redis Geospatial Index\n(GEOADD tọa độ thực, truy vấn < 2ms)"]
+        CDN["Media Cloudinary / S3 CDN\n(Ảnh sắc nét, nén tối ưu di động)"]
+        
+        S5 --> PG & REDIS & CDN
+    end
+```
+
+### 5.1. Nguồn Dữ Liệu & Giao Thức Thu Thập
+1. **Wikimedia & Wikidata SPARQL Endpoint**:
+   - Truy vấn toàn bộ danh lam thắng cảnh, di tích lịch sử, bãi biển, cung đèo tại các thành phố mục tiêu (Đà Nẵng, Hội An, Huế, Hà Nội, TP.HCM...).
+   - Thu thập thông tin bách khoa: Tọa độ địa lý chuẩn (`P625`), bài viết mô tả chi tiết, năm thành lập, hình ảnh giấy phép Creative Commons chất lượng cao (`P18`).
+2. **Traveloka & Cổng Thông Tin Dịch Vụ Du Lịch**:
+   - Thu thập các địa điểm ẩm thực địa phương (quán đặc sản, bún chả cá, bánh tráng thịt heo...), quán cafe view đẹp, khu cắm trại, rạp chiếu phim, khu vui chơi.
+   - Thu thập thông tin dịch vụ thực tế: Khoảng giá, giờ mở cửa/đóng cửa, tiện ích (chỗ để xe máy/ô tô, thanh toán thẻ, điều hòa), số lượng đánh giá thực tế từ du khách.
+
+### 5.2. Đường Ống 5 Tầng Khử Rác & Kiểm Duyệt Tự Động (Zero-Garbage Pipeline)
+Để phục vụ **10.000 người dùng đồng thời** với trải nghiệm mượt mà, đáng tin cậy, dữ liệu cào về bắt buộc phải đi qua 5 cổng kiểm duyệt nghiêm ngặt:
+
+- **Tầng 1: Khử trùng cú pháp & Chuẩn hóa Unicode (Sanitization)**:
+  - Loại bỏ hoàn toàn mã script, thẻ HTML, quảng cáo chèn trộm, ký tự vô nghĩa.
+  - Chuẩn hóa tên địa điểm tiếng Việt có dấu chuẩn Unicode dựng sẵn (NFC).
+- **Tầng 2: Xác thực Tọa độ GPS & Ranh giới Địa lý (Spatial Validation)**:
+  - Tọa độ GPS (Vĩ độ / Kinh độ) bắt buộc phải nằm trong phạm vi ranh giới hành chính hợp lệ của thành phố (ví dụ: Đà Nẵng: Lat $15.90 - 16.25$, Lon $107.90 - 108.40$).
+  - Loại bỏ 100% tọa độ lỗi $(0, 0)$, tọa độ rơi giữa biển sâu hoặc vùng núi không có đường bộ tiếp cận.
+  - Kiểm tra chéo với OpenStreetMap Reverse Geocoding để đối chiếu số nhà, tên đường thực tế.
+- **Tầng 3: Khử trùng lặp Thực thể (Entity Deduplication)**:
+  - Áp dụng thuật toán so khớp chuỗi mờ **Jaro-Winkler Similarity ($\ge 0.88$)** kết hợp khoảng cách địa lý **Haversine ($< 50\text{m}$)**.
+  - *Ví dụ thực tế*: Bản ghi từ Wikimedia *"Chùa Cầu (Hội An)"* và bản ghi từ cổng du lịch *"Chùa Cầu - Cầu Nhật Bản"* sẽ được tự động gộp thành **1 hồ sơ thực thể duy nhất (Canonical Master Record)**, bảo toàn nội dung mô tả hay nhất và ảnh đẹp nhất.
+- **Tầng 4: AI Verification - Kiểm tra trạng thái hoạt động thực tế**:
+  - Ứng dụng Gemini AI phân tích các đánh giá gần nhất: Phát hiện và loại bỏ các quán có thông báo *"Đã đóng cửa vĩnh viễn"*, *"Đang sửa chữa ngừng hoạt động"*, hoặc quán ảo spam.
+  - Chỉ phê duyệt các địa điểm có tín hiệu hoạt động trong 6 tháng gần nhất.
+- **Tầng 5: Kiểm duyệt & Tối ưu Media (High-Resolution Pipeline)**:
+  - Tự động gọi HTTP HEAD request kiểm tra liên kết ảnh (loại bỏ ảnh lỗi HTTP 404/403).
+  - Kiểm tra kích thước ảnh: Tối thiểu $800 \times 600\text{px}$, loại bỏ ảnh mờ, vỡ hạt, hoặc ảnh có đóng dấu bản quyền chìm (watermark) xấu xí.
+  - Tự động nén sang định dạng **WebP** và lưu trữ trên CDN máy chủ Việt Nam để tải siêu tốc trên ứng dụng di động.
+
+---
+
+## 6. PHÂN RÃ CÔNG VIỆC CHI TIẾT (WBS) & TIẾN ĐỘ 8 TUẦN
 
 ```mermaid
 gantt
