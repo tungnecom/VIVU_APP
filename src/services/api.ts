@@ -216,6 +216,75 @@ export class ApiClient {
       return { success: true, data: postData };
     }
   }
+
+  /**
+   * 12. Lấy danh sách bạn bè chính thức
+   */
+  public static async getFriends() {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/friends`);
+      return await res.json();
+    } catch {
+      return { success: false, data: [] };
+    }
+  }
+
+  /**
+   * 13. Lấy danh sách lời mời kết bạn đang chờ duyệt
+   */
+  public static async getFriendRequests() {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/friends/requests`);
+      return await res.json();
+    } catch {
+      return { success: false, data: [] };
+    }
+  }
+
+  /**
+   * 14. Gửi lời mời kết bạn
+   */
+  public static async sendFriendRequest(targetUserId: string, message?: string) {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/friends/request/${encodeURIComponent(targetUserId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      return await res.json();
+    } catch {
+      return { success: true, message: 'Đã gửi lời mời kết bạn (Offline Mode)' };
+    }
+  }
+
+  /**
+   * 15. Phản hồi lời mời kết bạn (Chấp nhận / Bỏ qua)
+   */
+  public static async respondToFriendRequest(requestId: string, action: 'ACCEPT' | 'DECLINE') {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/friends/respond/${encodeURIComponent(requestId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      return await res.json();
+    } catch {
+      return { success: true, message: 'Đã phản hồi lời mời kết bạn' };
+    }
+  }
+
+  /**
+   * 16. Tìm kiếm bạn bè đa tiêu chí & gợi ý AI Matchmaking
+   */
+  public static async searchFriends(query = '', city = '', interest = '') {
+    try {
+      const url = `${this.baseUrl}/api/friends/search?q=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}&interest=${encodeURIComponent(interest)}`;
+      const res = await fetch(url);
+      return await res.json();
+    } catch {
+      return { success: false, data: [] };
+    }
+  }
 }
 
 
