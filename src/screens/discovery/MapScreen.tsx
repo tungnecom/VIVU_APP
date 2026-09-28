@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   Linking,
+  Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -15,7 +18,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { COLORS, SHADOWS } from '../../constants/theme';
-import { ApiClient } from '../../services/api';
+import {
+  FULL_63_PROVINCES,
+  MASTER_NATIONWIDE_PLACES,
+  NationalPlace,
+  searchNationalPlaces,
+  VietnamProvince,
+} from '../../services/fullVietnamData';
 import { useAuthStore } from '../../stores/authStore';
 import { useFeedStore } from '../../stores/feedStore';
 import { ScreenKey } from '../../types';
@@ -24,7 +33,7 @@ interface MapScreenProps {
   onNavigate: (screen: ScreenKey) => void;
 }
 
-export type CategoryType =
+export type CategoryFilter =
   | 'all'
   | 'food'
   | 'tourism'
@@ -33,28 +42,7 @@ export type CategoryType =
   | 'entertainment'
   | 'wishes';
 
-interface MapPlaceItem {
-  id: string;
-  name: string;
-  category: string;
-  categoryType: 'food' | 'tourism' | 'stay' | 'school' | 'entertainment';
-  rating: number;
-  reviews?: number;
-  latitude: number;
-  longitude: number;
-  distanceKm: number;
-  distanceText: string;
-  image: string;
-  desc: string;
-  source: string;
-  priceRange?: string;
-  openingHours?: string;
-  address: string;
-  pinTop: string;
-  pinLeft: string;
-}
-
-interface UserWishItem {
+interface UserWishPin {
   id: string;
   userName: string;
   userAvatar: string;
@@ -88,15 +76,18 @@ function calculateHaversineDistance(
   return R * c;
 }
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
-  const [activeCategory, setActiveCategory] = useState<CategoryType>('all');
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [mapLayer, setMapLayer] = useState<'standard' | 'satellite'>('standard');
-  const [loading, setLoading] = useState(false);
-  const [radiusFilter, setRadiusFilter] = useState<number | null>(null);
-  const [checkedInSpots, setCheckedInSpots] = useState<Record<string, boolean>>({});
+  const [selectedProvince, setSelectedProvince] = useState<string>('Đà Nẵng');
+  const [isProvinceModalVisible, setIsProvinceModalVisible] = useState(false);
+  const [provinceSearchQuery, setProvinceSearchQuery] = useState('');
+  const [savedPlaces, setSavedPlaces] = useState<Record<string, boolean>>({});
+  const [activeDetailTab, setActiveDetailTab] = useState<'overview' | 'reviews' | 'photos'>('overview');
 
-  const selectedCity = useAuthStore((s) => s.selectedCity) || 'Đà Nẵng';
   const currentUser = useAuthStore((s) => s.user);
   const feedPosts = useFeedStore((s) => s.posts);
 
@@ -106,241 +97,38 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
     longitude: 108.2022,
   });
 
-  // Comprehensive Nationwide Places Database (Food, Tourism, Stay, School, Entertainment)
-  const nationwideDatabase: MapPlaceItem[] = [
-    // --- 🍽️ ĂN UỐNG & CAFE ---
-    {
-      id: 'f1',
-      name: 'Bánh Tráng Thịt Heo Bà Mua',
-      category: 'Ẩm thực truyền thống',
-      categoryType: 'food',
-      rating: 4.8,
-      reviews: 430,
-      latitude: 16.0633,
-      longitude: 108.2178,
-      distanceKm: 0.9,
-      distanceText: '900 m',
-      image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600',
-      desc: 'Đặc sản trứ danh thịt luộc hai đầu da giòn ngọt và mắm nêm bí truyền chuẩn vị miền Trung.',
-      source: 'SHOPEEFOOD',
-      priceRange: '45.000đ - 90.000đ',
-      openingHours: '06:30 - 22:00',
-      address: '95A Nguyễn Tri Phương, Thanh Khê, Đà Nẵng',
-      pinTop: '46%',
-      pinLeft: '28%',
-    },
-    {
-      id: 'f2',
-      name: 'Sơn Trà Marina Cafe & Lounge',
-      category: 'Cafe view biển',
-      categoryType: 'food',
-      rating: 4.9,
-      reviews: 580,
-      latitude: 16.1158,
-      longitude: 108.2536,
-      distanceKm: 3.5,
-      distanceText: '3.5 km',
-      image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600',
-      desc: 'Santorini giữa lòng Đà Nẵng, góc ngắm hoàng hôn vịnh biển đẹp mê hồn cùng thức uống acoustic.',
-      source: 'GRABFOOD',
-      priceRange: '50.000đ - 120.000đ',
-      openingHours: '07:00 - 22:30',
-      address: 'Đường Hồ Xanh, Thọ Quang, Sơn Trà, Đà Nẵng',
-      pinTop: '20%',
-      pinLeft: '72%',
-    },
-    {
-      id: 'f3',
-      name: 'Quán Nối Cafe Hoài Cổ',
-      category: 'Cafe Vintage',
-      categoryType: 'food',
-      rating: 4.9,
-      reviews: 290,
-      latitude: 16.0712,
-      longitude: 108.2231,
-      distanceKm: 1.2,
-      distanceText: '1.2 km',
-      image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600',
-      desc: 'Không gian bao cấp retro thập niên 90, cafe trứng béo ngậy và trà sen thơm ngát.',
-      source: 'FOODBOOK',
-      priceRange: '25.000đ - 55.000đ',
-      openingHours: '06:30 - 22:00',
-      address: '113/18 Nguyễn Chí Thanh, Hải Châu, Đà Nẵng',
-      pinTop: '38%',
-      pinLeft: '38%',
-    },
+  // Selected Place & Wish State
+  const [selectedPlace, setSelectedPlace] = useState<NationalPlace | null>(MASTER_NATIONWIDE_PLACES[0]);
+  const [selectedWish, setSelectedWish] = useState<UserWishPin | null>(null);
 
-    // --- 🏞️ DU LỊCH & DANH THẮNG ---
-    {
-      id: 't1',
-      name: 'Bán Đảo Sơn Trà & Chùa Linh Ứng',
-      category: 'Di tích & Thắng cảnh',
-      categoryType: 'tourism',
-      rating: 4.9,
-      reviews: 1250,
-      latitude: 16.1000,
-      longitude: 108.2700,
-      distanceKm: 4.2,
-      distanceText: '4.2 km',
-      image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600',
-      desc: 'Tượng Phật Bà Quan Âm cao nhất Việt Nam nhìn ra biển Đông, cung đường săn mây ngắm khỉ Voọc chà vá chân nâu.',
-      source: 'WIKIMEDIA',
-      priceRange: 'Miễn phí vé vào cửa',
-      openingHours: '06:00 - 18:30',
-      address: 'Bán đảo Sơn Trà, Thọ Quang, Đà Nẵng',
-      pinTop: '25%',
-      pinLeft: '80%',
-    },
-    {
-      id: 't2',
-      name: 'Cầu Rồng & Cầu Tình Yêu',
-      category: 'Biểu tượng checkin',
-      categoryType: 'tourism',
-      rating: 4.8,
-      reviews: 980,
-      latitude: 16.0611,
-      longitude: 108.2272,
-      distanceKm: 1.5,
-      distanceText: '1.5 km',
-      image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600',
-      desc: 'Cầu thép vòm rồng thép độc nhất vô nhị, trình diễn phun lửa & nước lúc 21h thứ Bảy và Chủ Nhật.',
-      source: 'WIKIMEDIA',
-      priceRange: 'Miễn phí tham quan',
-      openingHours: 'Mở cửa cả ngày (24/7)',
-      address: 'Nguyễn Văn Linh - Bạch Đằng, Hải Châu, Đà Nẵng',
-      pinTop: '52%',
-      pinLeft: '48%',
-    },
-    {
-      id: 't3',
-      name: 'Biển Mỹ Khê & Bãi tắm Phạm Văn Đồng',
-      category: 'Bãi biển Quốc tế',
-      categoryType: 'tourism',
-      rating: 4.9,
-      reviews: 1800,
-      latitude: 16.0592,
-      longitude: 108.2458,
-      distanceKm: 2.1,
-      distanceText: '2.1 km',
-      image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600',
-      desc: 'Top 6 bãi biển quyến rũ nhất hành tinh do Forbes bình chọn, bãi cát trắng mịn, dù lượn và lướt sóng.',
-      source: 'TRAVELOKA',
-      priceRange: 'Tắm biển miễn phí',
-      openingHours: '05:00 - 19:00 (Cứu hộ trực)',
-      address: 'Võ Nguyên Giáp, Phước Mỹ, Sơn Trà, Đà Nẵng',
-      pinTop: '62%',
-      pinLeft: '68%',
-    },
+  // Request GPS Permission on Mount
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          if (isMounted && loc?.coords) {
+            setUserLocation({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+          }
+        }
+      } catch {
+        // Fallback Da Nang center coordinates
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-    // --- 🏨 NGHỈ NGƠI & LƯU TRÚ ---
-    {
-      id: 's1',
-      name: 'Khách sạn Novotel Danang Premier Han River',
-      category: 'Khách sạn 5 sao',
-      categoryType: 'stay',
-      rating: 4.8,
-      reviews: 620,
-      latitude: 16.0772,
-      longitude: 108.2241,
-      distanceKm: 1.8,
-      distanceText: '1.8 km',
-      image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
-      desc: 'Khách sạn sang trọng bên bờ sông Hàn với Sky36 rooftop lounge cao nhất thành phố và hồ bơi vô cực.',
-      source: 'TRAVELOKA',
-      priceRange: '1.800.000đ - 3.500.000đ/đêm',
-      openingHours: 'Nhận phòng 14:00 • Trả phòng 12:00',
-      address: '36 Bạch Đằng, Thạch Thang, Hải Châu, Đà Nẵng',
-      pinTop: '35%',
-      pinLeft: '44%',
-    },
-    {
-      id: 's2',
-      name: 'InterContinental Danang Sun Peninsula Resort',
-      category: 'Resort nghỉ dưỡng',
-      categoryType: 'stay',
-      rating: 5.0,
-      reviews: 780,
-      latitude: 16.1215,
-      longitude: 108.3100,
-      distanceKm: 7.8,
-      distanceText: '7.8 km',
-      image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600',
-      desc: 'Kiệt tác kiến trúc của Bill Bensley ẩn mình giữa núi rừng Sơn Trà nguyên sinh nhìn thẳng ra vịnh biển riêng tư.',
-      source: 'TRAVELOKA',
-      priceRange: '8.000.000đ - 18.000.000đ/đêm',
-      openingHours: 'Lễ tân 24/7',
-      address: 'Bãi Bắc, Bán đảo Sơn Trà, Đà Nẵng',
-      pinTop: '15%',
-      pinLeft: '88%',
-    },
-
-    // --- 🏫 TRƯỜNG HỌC & GIÁO DỤC ---
-    {
-      id: 'sc1',
-      name: 'Đại Học Bách Khoa - Đại Học Đà Nẵng',
-      category: 'Trường Đại học',
-      categoryType: 'school',
-      rating: 4.7,
-      reviews: 350,
-      latitude: 16.0754,
-      longitude: 108.1534,
-      distanceKm: 3.8,
-      distanceText: '3.8 km',
-      image: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=600',
-      desc: 'Trung tâm đào tạo kỹ thuật, công nghệ hàng đầu miền Trung với khuôn viên rợp bóng cây xanh và thư viện hiện đại.',
-      source: 'WIKIMEDIA',
-      priceRange: 'Khuôn viên mở cửa sinh viên',
-      openingHours: '07:00 - 21:00',
-      address: '54 Nguyễn Lương Bằng, Hòa Khánh Bắc, Liên Chiểu',
-      pinTop: '32%',
-      pinLeft: '14%',
-    },
-    {
-      id: 'sc2',
-      name: 'Đại Học Kinh Tế Đà Nẵng',
-      category: 'Trường Đại học',
-      categoryType: 'school',
-      rating: 4.8,
-      reviews: 280,
-      latitude: 16.0520,
-      longitude: 108.2435,
-      distanceKm: 1.6,
-      distanceText: '1.6 km',
-      image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=600',
-      desc: 'Nơi quy tụ cộng đồng sinh viên năng động, các CLB du lịch tình nguyện và giao lưu cạ cứng trẻ tuổi.',
-      source: 'WIKIMEDIA',
-      priceRange: 'Cộng đồng sinh viên',
-      openingHours: '07:00 - 21:00',
-      address: '71 Ngũ Hành Sơn, Bắc Mỹ An, Ngũ Hành Sơn',
-      pinTop: '68%',
-      pinLeft: '56%',
-    },
-
-    // --- 🎡 VUI CHƠI & GIẢI TRÍ ---
-    {
-      id: 'e1',
-      name: 'Chợ Đêm Helio & Khu Vui Chơi',
-      category: 'Tổ hợp giải trí đêm',
-      categoryType: 'entertainment',
-      rating: 4.8,
-      reviews: 920,
-      latitude: 16.0352,
-      longitude: 108.2238,
-      distanceKm: 2.2,
-      distanceText: '2.2 km',
-      image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600',
-      desc: 'Thiên đường ẩm thực đêm lớn nhất Đà Nẵng, bia nướng âm nhạc live acoustic, rạp phim và games ngoài trời.',
-      source: 'SHOPEEFOOD',
-      priceRange: '20.000đ - 100.000đ',
-      openingHours: '17:30 - 23:00 hàng ngày',
-      address: 'Đường 2 Tháng 9, Hòa Cường Bắc, Hải Châu, Đà Nẵng',
-      pinTop: '74%',
-      pinLeft: '40%',
-    },
-  ];
-
-  // Dynamic User Wishes Synced from Live Feed Posts!
-  const liveWishes: UserWishItem[] = [
+  // Synchronized Wishes from feedStore and pre-curated community wishes
+  const liveWishes: UserWishPin[] = [
     {
       id: 'w1',
       userName: 'Tùng (Tôi)',
@@ -380,7 +168,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
       pinTop: '58%',
       pinLeft: '76%',
     },
-    // Also include any posts from feedStore that have wish or recruitment
+    // Dynamically synchronized from live feed posts (posts marked as wish or recruitment)
     ...feedPosts
       .filter((p) => p.isWish || p.isRecruitment)
       .map((p, idx) => ({
@@ -388,163 +176,191 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
         userName: p.author.name,
         userAvatar: p.author.avatar,
         trustScore: 92,
-        destination: p.taggedVenue?.name || p.wishDestination || p.author.location || 'Địa điểm vi vu',
+        destination: p.taggedVenue?.name || p.wishDestination || p.author.location || 'Điểm hẹn vi vu',
         dateText: p.wishDate || p.activitySnippet?.time || 'Hôm nay',
         note: p.content,
         latitude: p.taggedVenue?.latitude || 16.0600 + idx * 0.01,
         longitude: p.taggedVenue?.longitude || 108.2200 + idx * 0.01,
-        pinTop: `${48 + (idx * 12) % 30}%`,
-        pinLeft: `${40 + (idx * 16) % 40}%`,
+        pinTop: `${45 + (idx * 11) % 32}%`,
+        pinLeft: `${38 + (idx * 15) % 42}%`,
       })),
   ];
 
-  const [places, setPlaces] = useState<MapPlaceItem[]>(nationwideDatabase);
-  const [selectedPlace, setSelectedPlace] = useState<MapPlaceItem | null>(nationwideDatabase[0]);
-  const [selectedWish, setSelectedWish] = useState<UserWishItem | null>(null);
-
-  // Request GPS Permission & Update Distances dynamically
-  useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          if (isMounted && loc?.coords) {
-            setUserLocation({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-            });
-          }
+  // Filter places based on search, category, and province
+  const displayedPlaces: (NationalPlace & { distanceKm: number; distanceText: string })[] =
+    MASTER_NATIONWIDE_PLACES
+      .filter((item) => {
+        // Province filter
+        if (selectedProvince && !item.province.toLowerCase().includes(selectedProvince.toLowerCase())) {
+          return false;
         }
-      } catch {
-        // Fallback Da Nang center coordinates
-      }
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+        // Category filter
+        if (activeCategory !== 'all' && activeCategory !== 'wishes') {
+          if (item.categoryType !== activeCategory) return false;
+        }
+        // Search query filter
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          return (
+            item.name.toLowerCase().includes(q) ||
+            item.category.toLowerCase().includes(q) ||
+            item.district.toLowerCase().includes(q) ||
+            item.address.toLowerCase().includes(q) ||
+            item.desc.toLowerCase().includes(q)
+          );
+        }
+        return true;
+      })
+      .map((item, index) => {
+        const dist = calculateHaversineDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          item.latitude,
+          item.longitude
+        );
+        return {
+          ...item,
+          distanceKm: dist,
+          distanceText: dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`,
+          // Spread pins naturally if not pre-assigned
+          pinTop: item.pinTop || `${28 + (index * 14) % 52}%`,
+          pinLeft: item.pinLeft || `${20 + (index * 18) % 65}%`,
+        };
+      });
 
-  // Recalculate distance dynamically whenever userLocation changes
-  const computedPlaces: MapPlaceItem[] = places.map((place) => {
-    const dist = calculateHaversineDistance(
-      userLocation.latitude,
-      userLocation.longitude,
-      place.latitude,
-      place.longitude
-    );
-    return {
-      ...place,
-      distanceKm: dist,
-      distanceText: dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`,
-    };
-  });
-
-  // Filter places by category and search
-  const filteredPlaces = computedPlaces.filter((item) => {
-    // Category filter
-    if (activeCategory === 'food' && item.categoryType !== 'food') return false;
-    if (activeCategory === 'tourism' && item.categoryType !== 'tourism') return false;
-    if (activeCategory === 'stay' && item.categoryType !== 'stay') return false;
-    if (activeCategory === 'school' && item.categoryType !== 'school') return false;
-    if (activeCategory === 'entertainment' && item.categoryType !== 'entertainment') return false;
-
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        item.name.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q) ||
-        item.address.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  // Open Native Google Maps navigation
-  const handleOpenDirections = (place: MapPlaceItem) => {
-    const lat = place.latitude;
-    const lon = place.longitude;
-    const label = encodeURIComponent(place.name);
-    const url = Platform.select({
-      ios: `maps:0,0?q=${label}@${lat},${lon}`,
-      android: `geo:0,0?q=${lat},${lon}(${label})`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`,
-    });
-
+  // Action: Open Google Maps Native Navigation
+  const handleOpenGoogleMapsDirections = (place: NationalPlace) => {
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
     Linking.canOpenURL(url).then((supported) => {
       if (supported) {
         Linking.openURL(url);
       } else {
-        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`);
+        Alert.alert('Chỉ đường', `Mở tọa độ Google Maps: ${place.latitude}, ${place.longitude}`);
       }
     });
   };
 
-  // GPS Check-in (+30 Trust Score Points)
-  const handleGpsCheckIn = (place: MapPlaceItem) => {
-    if (checkedInSpots[place.id]) {
-      Alert.alert('Đã Check-in', 'Bạn đã check-in tại địa điểm này hôm nay rồi!');
+  // Action: Call Phone Hotline
+  const handleCallPlace = (phone: string) => {
+    if (!phone) {
+      Alert.alert('Thông báo', 'Địa điểm này chưa cập nhật số điện thoại.');
       return;
     }
+    const cleanPhone = phone.replace(/\s+/g, '');
+    Linking.openURL(`tel:${cleanPhone}`).catch(() => {
+      Alert.alert('Gọi điện', `Hotline: ${phone}`);
+    });
+  };
 
-    setCheckedInSpots({ ...checkedInSpots, [place.id]: true });
-
-    if (currentUser) {
-      useAuthStore.setState({
-        user: {
-          ...currentUser,
-          trustScore: Math.min(100, (currentUser.trustScore || 85) + 30),
-        },
+  // Action: Share Place Details
+  const handleSharePlace = async (place: NationalPlace) => {
+    try {
+      await Share.share({
+        message: `Khám phá ngay "${place.name}" trên VIVU Maps!\n📍 Địa chỉ: ${place.address}\n⭐ Đánh giá: ${place.rating}/5.0\n📞 Hotline: ${place.phone}`,
+        title: place.name,
       });
+    } catch {
+      // Ignored
     }
+  };
 
+  // Action: Toggle Save/Bookmark
+  const toggleSavePlace = (placeId: string) => {
+    setSavedPlaces((prev) => {
+      const isSaved = !prev[placeId];
+      Alert.alert(
+        isSaved ? 'Đã lưu địa điểm 🔖' : 'Đã bỏ lưu',
+        isSaved
+          ? 'Địa điểm đã được thêm vào danh sách yêu thích cá nhân của bạn.'
+          : 'Đã xóa khỏi danh sách yêu thích.'
+      );
+      return { ...prev, [placeId]: isSaved };
+    });
+  };
+
+  // Action: Navigate to Create Post with Tagged Place
+  const handleRecruitCompanions = (place: NationalPlace) => {
     Alert.alert(
-      '🎉 Check-in GPS Tọa Độ Thật!',
-      `Tọa độ GPS của bạn đã khớp với ${place.name}.\n\nBạn được thưởng +30 ĐIỂM UY TÍN! Điểm mới: ${Math.min(100, (currentUser?.trustScore || 85) + 30)}đ`,
-      [{ text: 'Tuyệt vời!' }]
+      'Tuyển Cạ Đến Đây 🛵',
+      `Tạo bài viết tuyển cạ đồng hành đến "${place.name}" ngay bây giờ?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Tạo bài đăng',
+          onPress: () => onNavigate('create_post'),
+        },
+      ]
     );
   };
 
-  // Category Selector Tabs
-  const categoriesList: Array<{ key: CategoryType; label: string; icon: string }> = [
-    { key: 'all', label: 'Tất cả', icon: 'grid-outline' },
-    { key: 'wishes', label: '✨ Nguyện vọng cạ', icon: 'navigate' },
-    { key: 'food', label: '🍽️ Ăn uống', icon: 'restaurant' },
-    { key: 'tourism', label: '🏞️ Du lịch', icon: 'compass' },
-    { key: 'stay', label: '🏨 Nghỉ ngơi', icon: 'bed' },
-    { key: 'school', label: '🏫 Trường học', icon: 'school' },
-    { key: 'entertainment', label: '🎡 Vui chơi', icon: 'balloon' },
-  ];
+  // Category Icons & Badges
+  const getCategoryPinIcon = (type: string) => {
+    switch (type) {
+      case 'food':
+        return 'restaurant';
+      case 'tourism':
+        return 'trail-sign';
+      case 'stay':
+        return 'bed';
+      case 'school':
+        return 'school';
+      case 'entertainment':
+        return 'sparkles';
+      default:
+        return 'location';
+    }
+  };
+
+  const getCategoryPinColor = (type: string) => {
+    switch (type) {
+      case 'food':
+        return '#EA580C'; // Warm orange
+      case 'tourism':
+        return '#059669'; // Green emerald
+      case 'stay':
+        return '#2563EB'; // Royal blue
+      case 'school':
+        return '#7C3AED'; // Purple
+      case 'entertainment':
+        return '#DB2777'; // Pink magenta
+      default:
+        return COLORS.primary;
+    }
+  };
+
+  // Filtered 63 Provinces for Selector Modal
+  const filteredProvinces = FULL_63_PROVINCES.filter((p) =>
+    p.name.toLowerCase().includes(provinceSearchQuery.toLowerCase().trim())
+  );
 
   return (
     <View style={styles.container}>
-      {/* Google Maps Simulated Viewport */}
+      {/* MAP CANVAS VIEWPORT */}
       <View style={styles.mapArea}>
         <Image
           source={{
             uri:
               mapLayer === 'satellite'
-                ? 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=1200'
-                : 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=1200',
+                ? 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=1400'
+                : 'https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?w=1400',
           }}
           style={styles.mapImage}
           resizeMode="cover"
         />
 
-        {/* User GPS Pin (Blue pulsing beacon) */}
+        {/* GPS Location Beacon (Current User) */}
         <View style={styles.userGpsPin}>
           <View style={styles.userGpsHalo} />
           <View style={styles.userGpsDot} />
         </View>
 
-        {/* 1. Category Places Markers */}
+        {/* NATIONWIDE PLACES PINS */}
         {activeCategory !== 'wishes' &&
-          filteredPlaces.map((place) => {
-            const isActive = selectedPlace?.id === place.id && !selectedWish;
+          displayedPlaces.map((place) => {
+            const isSelected = selectedPlace?.id === place.id;
+            const pinColor = getCategoryPinColor(place.categoryType);
+            const iconName = getCategoryPinIcon(place.categoryType);
+
             return (
               <TouchableOpacity
                 key={place.id}
@@ -556,46 +372,30 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
                   setSelectedPlace(place);
                   setSelectedWish(null);
                 }}
+                activeOpacity={0.85}
               >
                 <View
                   style={[
                     styles.pinBadge,
-                    place.categoryType === 'food' && { backgroundColor: '#EA580C' },
-                    place.categoryType === 'tourism' && { backgroundColor: '#0284C7' },
-                    place.categoryType === 'stay' && { backgroundColor: '#7C3AED' },
-                    place.categoryType === 'school' && { backgroundColor: '#059669' },
-                    place.categoryType === 'entertainment' && { backgroundColor: '#DB2777' },
-                    isActive && styles.pinBadgeActive,
+                    { backgroundColor: pinColor },
+                    isSelected && styles.pinBadgeActive,
                   ]}
                 >
-                  <Ionicons
-                    name={
-                      place.categoryType === 'food'
-                        ? 'restaurant'
-                        : place.categoryType === 'tourism'
-                        ? 'camera'
-                        : place.categoryType === 'stay'
-                        ? 'bed'
-                        : place.categoryType === 'school'
-                        ? 'school'
-                        : 'balloon'
-                    }
-                    size={13}
-                    color="#FFF"
-                  />
+                  <Ionicons name={iconName as any} size={13} color="#FFF" />
                   <Text style={styles.pinText} numberOfLines={1}>
-                    {place.name.length > 13 ? place.name.slice(0, 13) + '...' : place.name}
+                    {place.name.length > 14 ? place.name.substring(0, 14) + '...' : place.name}
                   </Text>
-                  <Text style={styles.pinDistText}>({place.distanceText})</Text>
+                  <Text style={styles.pinDistText}>• {place.distanceText}</Text>
                 </View>
+                <View style={[styles.pinAnchorTriangle, { borderTopColor: pinColor }]} />
               </TouchableOpacity>
             );
           })}
 
-        {/* 2. SYNCHRONIZED USER WISHES PINS (Nguyện vọng cạ cứng đồng bộ lên Map) */}
-        {(activeCategory === 'wishes' || activeCategory === 'all') &&
+        {/* LIVE SYNCHRONIZED USER WISHES PINS */}
+        {(activeCategory === 'all' || activeCategory === 'wishes') &&
           liveWishes.map((wish) => {
-            const isWishActive = selectedWish?.id === wish.id;
+            const isSelected = selectedWish?.id === wish.id;
             return (
               <TouchableOpacity
                 key={wish.id}
@@ -607,198 +407,495 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
                   setSelectedWish(wish);
                   setSelectedPlace(null);
                 }}
+                activeOpacity={0.85}
               >
-                {/* Speech bubble showing user wish */}
-                <View style={[styles.wishSpeechBubble, isWishActive && styles.wishBubbleActive]}>
+                {/* Speech Bubble */}
+                <View style={[styles.wishSpeechBubble, isSelected && styles.wishBubbleActive]}>
                   <Text style={styles.wishBubbleUser}>@{wish.userName}</Text>
                   <Text style={styles.wishBubbleText} numberOfLines={1}>
                     {wish.destination}
                   </Text>
                 </View>
-
-                {/* Avatar beacon */}
+                {/* Pulsing Avatar Beacon */}
                 <View style={styles.wishAvatarBeacon}>
+                  <View style={styles.wishRadarRing} />
                   <Image source={{ uri: wish.userAvatar }} style={styles.wishAvatar} />
-                  <View style={styles.wishPulseRing} />
+                  <View style={styles.wishOnlineDot} />
                 </View>
               </TouchableOpacity>
             );
           })}
       </View>
 
-      {/* Floating Google Maps Style Top Bar */}
-      <View style={styles.floatingTop}>
-        {/* Search Bar Row */}
-        <View style={styles.searchBarRow}>
+      {/* FLOATING GOOGLE MAPS TOP HEADER & SEARCH BAR */}
+      <View style={styles.floatingHeaderArea}>
+        {/* Google Maps Search Bar 1:1 */}
+        <View style={styles.googleSearchBar}>
           <TouchableOpacity
-            style={styles.backCircleBtn}
-            onPress={() => onNavigate('home_feed')}
+            style={styles.searchIconBtn}
+            onPress={() => setIsProvinceModalVisible(true)}
           >
-            <Ionicons name="arrow-back" size={20} color={COLORS.textDark} />
+            <Ionicons name="search" size={20} color="#4285F4" />
           </TouchableOpacity>
 
-          <View style={styles.googleSearchBar}>
-            <Ionicons name="search" size={18} color="#EA4335" />
-            <TextInput
-              style={styles.googleSearchInput}
-              placeholder={`Khám phá toàn quốc (${selectedCity})`}
-              placeholderTextColor={COLORS.textLight}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.citySelectorChip}
-              onPress={() => onNavigate('city_select')}
-            >
-              <Text style={styles.citySelectorText}>{selectedCity}</Text>
-              <Ionicons name="chevron-down" size={12} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Tìm kiếm ở ${selectedProvince} (Ăn uống, trường học, điểm vui chơi...)`}
+            placeholderTextColor="#6B7280"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
 
-          {/* Layer switcher */}
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearSearchBtn}
+              onPress={() => setSearchQuery('')}
+            >
+              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
+
+          {/* Active Province Badge Button */}
           <TouchableOpacity
-            style={styles.layerBtn}
-            onPress={() =>
-              setMapLayer(mapLayer === 'standard' ? 'satellite' : 'standard')
-            }
+            style={styles.provinceBadgeBtn}
+            onPress={() => setIsProvinceModalVisible(true)}
           >
-            <Ionicons
-              name={mapLayer === 'standard' ? 'earth' : 'map'}
-              size={20}
-              color={COLORS.primary}
-            />
+            <Ionicons name="location-sharp" size={13} color="#EA4335" />
+            <Text style={styles.provinceBadgeText} numberOfLines={1}>
+              {selectedProvince}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color="#4B5563" />
           </TouchableOpacity>
         </View>
 
-        {/* Category Carousel Pills */}
+        {/* HORIZONTAL CATEGORY FILTER CHIPS (Google Maps Style) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryPillsScroll}
+          contentContainerStyle={styles.categoryScroll}
         >
-          {categoriesList.map((cat) => {
-            const isActive = activeCategory === cat.key;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={[
-                  styles.categoryPill,
-                  isActive && styles.categoryPillActive,
-                  cat.key === 'wishes' && styles.categoryPillWishes,
-                  cat.key === 'wishes' && isActive && styles.categoryPillWishesActive,
-                ]}
-                onPress={() => setActiveCategory(cat.key)}
-              >
-                <Text
-                  style={[
-                    styles.categoryPillText,
-                    isActive && styles.categoryPillTextActive,
-                    cat.key === 'wishes' && { fontWeight: '800' },
-                  ]}
-                >
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          <TouchableOpacity
+            style={[styles.categoryChip, activeCategory === 'all' && styles.categoryChipActive]}
+            onPress={() => setActiveCategory('all')}
+          >
+            <Ionicons
+              name="globe-outline"
+              size={15}
+              color={activeCategory === 'all' ? '#FFF' : '#374151'}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                activeCategory === 'all' && styles.categoryChipTextActive,
+              ]}
+            >
+              Tất cả ({displayedPlaces.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.categoryChip, activeCategory === 'food' && styles.categoryChipActive]}
+            onPress={() => setActiveCategory('food')}
+          >
+            <Ionicons
+              name="restaurant-outline"
+              size={15}
+              color={activeCategory === 'food' ? '#FFF' : '#374151'}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                activeCategory === 'food' && styles.categoryChipTextActive,
+              ]}
+            >
+              🍽️ Ăn uống
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.categoryChip, activeCategory === 'tourism' && styles.categoryChipActive]}
+            onPress={() => setActiveCategory('tourism')}
+          >
+            <Ionicons
+              name="trail-sign-outline"
+              size={15}
+              color={activeCategory === 'tourism' ? '#FFF' : '#374151'}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                activeCategory === 'tourism' && styles.categoryChipTextActive,
+              ]}
+            >
+              🏞️ Điểm tham quan
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.categoryChip, activeCategory === 'stay' && styles.categoryChipActive]}
+            onPress={() => setActiveCategory('stay')}
+          >
+            <Ionicons
+              name="bed-outline"
+              size={15}
+              color={activeCategory === 'stay' ? '#FFF' : '#374151'}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                activeCategory === 'stay' && styles.categoryChipTextActive,
+              ]}
+            >
+              🏨 Khách sạn
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.categoryChip, activeCategory === 'school' && styles.categoryChipActive]}
+            onPress={() => setActiveCategory('school')}
+          >
+            <Ionicons
+              name="school-outline"
+              size={15}
+              color={activeCategory === 'school' ? '#FFF' : '#374151'}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                activeCategory === 'school' && styles.categoryChipTextActive,
+              ]}
+            >
+              🏫 Trường học
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categoryChip,
+              activeCategory === 'entertainment' && styles.categoryChipActive,
+            ]}
+            onPress={() => setActiveCategory('entertainment')}
+          >
+            <Ionicons
+              name="sparkles-outline"
+              size={15}
+              color={activeCategory === 'entertainment' ? '#FFF' : '#374151'}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                activeCategory === 'entertainment' && styles.categoryChipTextActive,
+              ]}
+            >
+              🎡 Vui chơi
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categoryChip,
+              styles.categoryWishChip,
+              activeCategory === 'wishes' && styles.categoryWishChipActive,
+            ]}
+            onPress={() => setActiveCategory('wishes')}
+          >
+            <Ionicons
+              name="heart-circle"
+              size={16}
+              color={activeCategory === 'wishes' ? '#FFF' : '#DC2626'}
+            />
+            <Text
+              style={[
+                styles.categoryChipText,
+                styles.categoryWishChipText,
+                activeCategory === 'wishes' && styles.categoryChipTextActive,
+              ]}
+            >
+              📍 Nguyện vọng cạ ({liveWishes.length})
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
-      {/* Map Right Quick Actions (Target GPS, Compass, Add Wish) */}
-      <View style={styles.rightFloatControls}>
+      {/* FLOATING MAP CONTROLS (Layer Switcher, GPS, Compass) */}
+      <View style={styles.floatingControlsRight}>
+        {/* Layer Switcher (Standard / Satellite) */}
         <TouchableOpacity
-          style={styles.rightControlBtn}
-          onPress={() => {
-            Alert.alert('Tọa độ GPS Hiện Tại', `Vĩ độ: ${userLocation.latitude.toFixed(4)}\nKinh độ: ${userLocation.longitude.toFixed(4)}\nBán kính định vị chính xác: ~10m`);
-          }}
+          style={styles.floatingSquareBtn}
+          onPress={() => setMapLayer(mapLayer === 'standard' ? 'satellite' : 'standard')}
         >
-          <Ionicons name="locate" size={20} color={COLORS.primary} />
+          <Ionicons
+            name={mapLayer === 'standard' ? 'earth' : 'map'}
+            size={20}
+            color="#1F2937"
+          />
         </TouchableOpacity>
 
+        {/* My Location GPS Beacon */}
         <TouchableOpacity
-          style={[styles.rightControlBtn, { backgroundColor: '#EF4444' }]}
-          onPress={() => onNavigate('create_post')}
+          style={[styles.floatingSquareBtn, { marginTop: 10 }]}
+          onPress={() => {
+            Alert.alert(
+              'Định vị GPS',
+              `Tọa độ hiện tại: ${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}`
+            );
+          }}
         >
-          <Ionicons name="add" size={24} color="#FFF" />
+          <Ionicons name="locate" size={20} color="#2563EB" />
         </TouchableOpacity>
       </View>
 
-      {/* BOTTOM CARD: Selected Place Card */}
+      {/* GOOGLE MAPS 1:1 INTERACTIVE BOTTOM SHEET (SELECTED PLACE) */}
       {selectedPlace && !selectedWish && (
-        <View style={styles.bottomCardWrapper}>
-          <View style={styles.placeCard}>
-            <Image source={{ uri: selectedPlace.image }} style={styles.placeThumb} />
-            <View style={styles.placeInfo}>
-              <View style={styles.placeHeader}>
-                <Text style={styles.placeName} numberOfLines={1}>
-                  {selectedPlace.name}
-                </Text>
-                <View style={styles.sourceTag}>
-                  <Text style={styles.sourceTagText}>{selectedPlace.source}</Text>
+        <View style={styles.googleBottomSheet}>
+          {/* Sheet Handle */}
+          <View style={styles.sheetHandleWrap}>
+            <View style={styles.sheetHandle} />
+          </View>
+
+          {/* Place Header Info */}
+          <View style={styles.placeHeaderRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.placeTitle}>{selectedPlace.name}</Text>
+              <View style={styles.ratingAndReviewsRow}>
+                <Text style={styles.ratingScoreText}>{selectedPlace.rating.toFixed(1)}</Text>
+                <View style={styles.starRow}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Ionicons key={s} name="star" size={13} color="#FBBF24" />
+                  ))}
                 </View>
+                <Text style={styles.reviewsCountText}>({selectedPlace.reviewsCount})</Text>
+                <Text style={styles.categorySubText}>• {selectedPlace.category}</Text>
               </View>
-
-              <View style={styles.placeMetaRow}>
-                <Text style={styles.placeRating}>⭐ {selectedPlace.rating}</Text>
-                <Text style={styles.placeCategory}>• {selectedPlace.category}</Text>
-                <Text style={styles.placeDistance}>• 📍 {selectedPlace.distanceText}</Text>
-              </View>
-
-              <Text style={styles.placeAddress} numberOfLines={1}>
-                {selectedPlace.address}
-              </Text>
-
-              <View style={styles.placeActions}>
-                <TouchableOpacity
-                  style={styles.directionsBtn}
-                  onPress={() => handleOpenDirections(selectedPlace)}
-                >
-                  <Ionicons name="navigate" size={14} color="#FFF" />
-                  <Text style={styles.directionsBtnText}>Chỉ đường GG Maps ↗</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.checkInBtn,
-                    checkedInSpots[selectedPlace.id] && styles.checkInBtnDone,
-                  ]}
-                  onPress={() => handleGpsCheckIn(selectedPlace)}
-                >
-                  <Ionicons
-                    name={checkedInSpots[selectedPlace.id] ? 'checkmark-circle' : 'shield-checkmark'}
-                    size={14}
-                    color={checkedInSpots[selectedPlace.id] ? '#059669' : COLORS.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.checkInBtnText,
-                      checkedInSpots[selectedPlace.id] && { color: '#059669' },
-                    ]}
-                  >
-                    {checkedInSpots[selectedPlace.id] ? 'Đã Check-in' : 'Check-in (+30đ)'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.meetupBtn}
-                  onPress={() => onNavigate('create_post')}
-                >
-                  <Text style={styles.meetupBtnText}>Rủ cạ đi</Text>
-                </TouchableOpacity>
+              <View style={styles.statusAndHoursRow}>
+                <Text style={styles.openStatusText}>Đang mở cửa</Text>
+                <Text style={styles.hoursText}>• {selectedPlace.openingHours}</Text>
+                <Text style={styles.distanceBadge}>• {selectedPlace.district}</Text>
               </View>
             </View>
+
+            {/* Thumbnail / Hero Photo */}
+            <Image source={{ uri: selectedPlace.image }} style={styles.placeHeroThumbnail} />
           </View>
+
+          {/* GOOGLE MAPS ACTION BUTTONS ROW (Directions, Call, Save, Recruit, Share) */}
+          <View style={styles.actionButtonsRow}>
+            {/* 1. Chỉ đường (Google Blue Hero Button) */}
+            <TouchableOpacity
+              style={styles.googleActionBtn}
+              onPress={() => handleOpenGoogleMapsDirections(selectedPlace)}
+            >
+              <View style={[styles.actionIconCircle, { backgroundColor: '#1A73E8' }]}>
+                <Ionicons name="navigate" size={18} color="#FFF" />
+              </View>
+              <Text style={[styles.actionBtnLabel, { color: '#1A73E8', fontWeight: '700' }]}>
+                Chỉ đường
+              </Text>
+            </TouchableOpacity>
+
+            {/* 2. Gọi điện (Hotline) */}
+            <TouchableOpacity
+              style={styles.googleActionBtn}
+              onPress={() => handleCallPlace(selectedPlace.phone)}
+            >
+              <View style={styles.actionIconCircle}>
+                <Ionicons name="call" size={18} color="#1A73E8" />
+              </View>
+              <Text style={styles.actionBtnLabel}>Gọi điện</Text>
+            </TouchableOpacity>
+
+            {/* 3. Lưu lại (Favorite) */}
+            <TouchableOpacity
+              style={styles.googleActionBtn}
+              onPress={() => toggleSavePlace(selectedPlace.id)}
+            >
+              <View style={styles.actionIconCircle}>
+                <Ionicons
+                  name={savedPlaces[selectedPlace.id] ? 'bookmark' : 'bookmark-outline'}
+                  size={18}
+                  color={savedPlaces[selectedPlace.id] ? '#EA4335' : '#1A73E8'}
+                />
+              </View>
+              <Text style={styles.actionBtnLabel}>
+                {savedPlaces[selectedPlace.id] ? 'Đã lưu' : 'Lưu'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* 4. Rủ cạ đi cùng (VIVU Exclusive) */}
+            <TouchableOpacity
+              style={styles.googleActionBtn}
+              onPress={() => handleRecruitCompanions(selectedPlace)}
+            >
+              <View style={[styles.actionIconCircle, { backgroundColor: '#FF385C' }]}>
+                <Ionicons name="people" size={18} color="#FFF" />
+              </View>
+              <Text style={[styles.actionBtnLabel, { color: '#FF385C', fontWeight: '700' }]}>
+                Rủ cạ đi
+              </Text>
+            </TouchableOpacity>
+
+            {/* 5. Chia sẻ */}
+            <TouchableOpacity
+              style={styles.googleActionBtn}
+              onPress={() => handleSharePlace(selectedPlace)}
+            >
+              <View style={styles.actionIconCircle}>
+                <Ionicons name="share-social" size={18} color="#1A73E8" />
+              </View>
+              <Text style={styles.actionBtnLabel}>Chia sẻ</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* TAB BAR (Tổng quan / Đánh giá / Ảnh) */}
+          <View style={styles.sheetTabBar}>
+            <TouchableOpacity
+              style={[
+                styles.sheetTabItem,
+                activeDetailTab === 'overview' && styles.sheetTabItemActive,
+              ]}
+              onPress={() => setActiveDetailTab('overview')}
+            >
+              <Text
+                style={[
+                  styles.sheetTabText,
+                  activeDetailTab === 'overview' && styles.sheetTabTextActive,
+                ]}
+              >
+                Tổng quan
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.sheetTabItem,
+                activeDetailTab === 'reviews' && styles.sheetTabItemActive,
+              ]}
+              onPress={() => setActiveDetailTab('reviews')}
+            >
+              <Text
+                style={[
+                  styles.sheetTabText,
+                  activeDetailTab === 'reviews' && styles.sheetTabTextActive,
+                ]}
+              >
+                Đánh giá ({selectedPlace.reviewsCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.sheetTabItem,
+                activeDetailTab === 'photos' && styles.sheetTabItemActive,
+              ]}
+              onPress={() => setActiveDetailTab('photos')}
+            >
+              <Text
+                style={[
+                  styles.sheetTabText,
+                  activeDetailTab === 'photos' && styles.sheetTabTextActive,
+                ]}
+              >
+                Ảnh chụp
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* TAB CONTENT */}
+          <ScrollView style={styles.sheetBodyScroll} showsVerticalScrollIndicator={false}>
+            {activeDetailTab === 'overview' && (
+              <View style={styles.tabContentWrap}>
+                {/* Address Line */}
+                <View style={styles.infoRow}>
+                  <Ionicons name="location-outline" size={18} color="#5F6368" />
+                  <Text style={styles.infoRowText}>{selectedPlace.address}</Text>
+                </View>
+
+                {/* Price Range */}
+                <View style={styles.infoRow}>
+                  <Ionicons name="pricetag-outline" size={18} color="#5F6368" />
+                  <Text style={styles.infoRowText}>Giá tham khảo: {selectedPlace.priceRange}</Text>
+                </View>
+
+                {/* Hotline */}
+                <View style={styles.infoRow}>
+                  <Ionicons name="call-outline" size={18} color="#5F6368" />
+                  <Text style={styles.infoRowText}>Hotline: {selectedPlace.phone}</Text>
+                </View>
+
+                {/* Description */}
+                <Text style={styles.placeDescription}>{selectedPlace.desc}</Text>
+
+                {/* Facilities Badges */}
+                <View style={styles.facilitiesRow}>
+                  {selectedPlace.facilities.map((f, i) => (
+                    <View key={i} style={styles.facilityBadge}>
+                      <Ionicons name="checkmark-circle" size={13} color="#059669" />
+                      <Text style={styles.facilityText}>{f}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Data Source Badge */}
+                <View style={styles.sourceBadgeWrap}>
+                  <Ionicons name="shield-checkmark" size={14} color="#0284C7" />
+                  <Text style={styles.sourceBadgeText}>
+                    Dữ liệu được xác thực bởi {selectedPlace.source} & Google Maps
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {activeDetailTab === 'reviews' && (
+              <View style={styles.tabContentWrap}>
+                <View style={styles.reviewSummaryBox}>
+                  <Text style={styles.reviewBigRating}>{selectedPlace.rating.toFixed(1)}</Text>
+                  <View>
+                    <View style={styles.starRow}>
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Ionicons key={s} name="star" size={15} color="#FBBF24" />
+                      ))}
+                    </View>
+                    <Text style={styles.reviewSubText}>Dựa trên {selectedPlace.reviewsCount} bài đánh giá</Text>
+                  </View>
+                </View>
+
+                {/* Sample Verified Reviews */}
+                <View style={styles.reviewCardItem}>
+                  <View style={styles.reviewAuthorRow}>
+                    <Image
+                      source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100' }}
+                      style={styles.reviewAvatar}
+                    />
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                      <Text style={styles.reviewAuthorName}>Hà Linh (Cạ Sành Ăn)</Text>
+                      <Text style={styles.reviewTimeAgo}>2 ngày trước • Đã xác thực đến quán</Text>
+                    </View>
+                    <View style={styles.ratingPill}>
+                      <Ionicons name="star" size={12} color="#FFF" />
+                      <Text style={styles.ratingPillText}>5.0</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.reviewContent}>
+                    Quán chuẩn vị cực kỳ ngon, mắm nêm đậm đà thơm nức! Không gian sạch sẽ, bãi đỗ xe máy và ô tô rất thoải mái. Rủ cạ qua VIVU cùng đi ăn rất vui!
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {activeDetailTab === 'photos' && (
+              <View style={styles.photosGrid}>
+                {selectedPlace.gallery.map((img, i) => (
+                  <Image key={i} source={{ uri: img }} style={styles.galleryImage} />
+                ))}
+              </View>
+            )}
+          </ScrollView>
         </View>
       )}
 
-      {/* BOTTOM CARD: Selected Synchronized User Wish Card */}
+      {/* SYNCHRONIZED USER WISH BOTTOM CARD */}
       {selectedWish && (
-        <View style={styles.bottomCardWrapper}>
+        <View style={styles.wishDetailOverlay}>
           <View style={styles.wishDetailCard}>
             <View style={styles.wishDetailHeader}>
               <Image source={{ uri: selectedWish.userAvatar }} style={styles.wishDetailAvatar} />
@@ -813,7 +910,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
                 <Text style={styles.wishDetailTime}>📅 {selectedWish.dateText}</Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedWish(null)}>
-                <Ionicons name="close" size={20} color={COLORS.textLight} />
+                <Ionicons name="close" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
@@ -829,13 +926,71 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
                 style={styles.connectWishBtn}
                 onPress={() => onNavigate('personal_chat')}
               >
-                <Ionicons name="chatbubbles" size={15} color="#FFF" />
+                <Ionicons name="chatbubbles" size={16} color="#FFF" />
                 <Text style={styles.connectWishBtnText}>Nhắn tin ghép cạ ngay</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       )}
+
+      {/* 63 PROVINCES SELECTION MODAL */}
+      <Modal
+        visible={isProvinceModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsProvinceModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.provinceModalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn Tỉnh / Thành Phố (63 Tỉnh)</Text>
+              <TouchableOpacity onPress={() => setIsProvinceModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1F2937" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalSearchBar}>
+              <Ionicons name="search" size={18} color="#6B7280" />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Tìm tỉnh thành (Hà Nội, Sài Gòn, Đà Lạt...)"
+                placeholderTextColor="#9CA3AF"
+                value={provinceSearchQuery}
+                onChangeText={setProvinceSearchQuery}
+              />
+            </View>
+
+            <ScrollView style={styles.provinceListScroll} showsVerticalScrollIndicator={false}>
+              {filteredProvinces.map((prov) => (
+                <TouchableOpacity
+                  key={prov.id}
+                  style={[
+                    styles.provinceItemRow,
+                    selectedProvince === prov.name && styles.provinceItemRowActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedProvince(prov.name);
+                    setUserLocation({ latitude: prov.latitude, longitude: prov.longitude });
+                    setIsProvinceModalVisible(false);
+                  }}
+                >
+                  <Image source={{ uri: prov.coverImage }} style={styles.provinceThumb} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.provinceNameText}>{prov.name}</Text>
+                    <Text style={styles.provinceRegionText}>
+                      {prov.region} • {prov.districts.length} quận/huyện
+                    </Text>
+                  </View>
+                  {selectedProvince === prov.name && (
+                    <Ionicons name="checkmark-circle" size={20} color="#1A73E8" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -864,37 +1019,37 @@ const styles = StyleSheet.create({
   },
   userGpsHalo: {
     position: 'absolute',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(37, 99, 235, 0.3)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(66, 133, 244, 0.25)',
   },
   userGpsDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#4285F4',
     borderWidth: 2.5,
     borderColor: '#FFFFFF',
   },
   pinWrapper: {
     position: 'absolute',
+    alignItems: 'center',
     zIndex: 10,
     ...SHADOWS.md,
   },
   pinBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
     paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 14,
+    borderRadius: 16,
     gap: 4,
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   pinBadgeActive: {
-    transform: [{ scale: 1.12 }],
+    transform: [{ scale: 1.15 }],
     borderColor: '#FEF08A',
     borderWidth: 2.5,
   },
@@ -907,6 +1062,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     fontSize: 10,
     fontWeight: '600',
+  },
+  pinAnchorTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    marginTop: -1,
   },
   wishPinWrapper: {
     position: 'absolute',
@@ -936,13 +1101,20 @@ const styles = StyleSheet.create({
   },
   wishBubbleText: {
     fontSize: 10,
-    color: COLORS.textDark,
+    color: '#1F2937',
     fontWeight: '600',
   },
   wishAvatarBeacon: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  wishRadarRing: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(239, 68, 68, 0.25)',
   },
   wishAvatar: {
     width: 32,
@@ -951,114 +1123,108 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#EF4444',
   },
-  wishPulseRing: {
+  wishOnlineDot: {
     position: 'absolute',
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+    bottom: -1,
+    right: -1,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
-  floatingTop: {
+  floatingHeaderArea: {
     position: 'absolute',
-    top: 40,
+    top: Platform.OS === 'ios' ? 48 : 28,
     left: 12,
     right: 12,
-    gap: 8,
     zIndex: 30,
   },
-  searchBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  backCircleBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.md,
-  },
   googleSearchBar: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    borderRadius: 28,
     paddingHorizontal: 12,
-    height: 44,
-    gap: 6,
+    height: 50,
     ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
   },
-  googleSearchInput: {
+  searchIconBtn: {
+    padding: 6,
+  },
+  searchInput: {
     flex: 1,
-    fontSize: 13,
-    color: COLORS.textDark,
+    fontSize: 14,
+    color: '#1F2937',
+    paddingHorizontal: 8,
   },
-  citySelectorChip: {
+  clearSearchBtn: {
+    padding: 6,
+  },
+  provinceBadgeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
-    borderRadius: 12,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 2,
+    paddingVertical: 5,
+    borderRadius: 14,
+    gap: 4,
+    maxWidth: 110,
   },
-  citySelectorText: {
+  provinceBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: '#374151',
   },
-  layerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.md,
+  categoryScroll: {
+    paddingVertical: 10,
+    gap: 8,
   },
-  categoryPillsScroll: {
+  categoryChip: {
     flexDirection: 'row',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  categoryPill: {
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 7,
+    borderRadius: 20,
+    gap: 5,
     ...SHADOWS.sm,
-  },
-  categoryPillActive: {
-    backgroundColor: COLORS.primary,
-  },
-  categoryPillWishes: {
-    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: 'rgba(0,0,0,0.08)',
   },
-  categoryPillWishesActive: {
-    backgroundColor: '#EF4444',
+  categoryChipActive: {
+    backgroundColor: '#1A73E8',
+    borderColor: '#1A73E8',
   },
-  categoryPillText: {
+  categoryWishChip: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  categoryWishChipActive: {
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
+  },
+  categoryChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textDark,
+    color: '#374151',
   },
-  categoryPillTextActive: {
+  categoryChipTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
   },
-  rightFloatControls: {
+  categoryWishChipText: {
+    color: '#DC2626',
+  },
+  floatingControlsRight: {
     position: 'absolute',
     right: 14,
-    top: 155,
-    gap: 10,
+    top: 150,
     zIndex: 25,
   },
-  rightControlBtn: {
+  floatingSquareBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -1066,204 +1232,422 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
   },
-  bottomCardWrapper: {
+  googleBottomSheet: {
     position: 'absolute',
-    bottom: 20,
-    left: 14,
-    right: 14,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    maxHeight: '48%',
+    ...SHADOWS.md,
     zIndex: 40,
   },
-  placeCard: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 12,
-    ...SHADOWS.md,
-  },
-  placeThumb: {
-    width: 90,
-    height: 115,
-    borderRadius: 12,
-  },
-  placeInfo: {
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: 'space-between',
-  },
-  placeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  sheetHandleWrap: {
     alignItems: 'center',
+    paddingVertical: 8,
   },
-  placeName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.textDark,
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
   },
-  sourceTag: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  sourceTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#1D4ED8',
-  },
-  placeMetaRow: {
+  placeHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+  },
+  placeTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  ratingAndReviewsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
+    marginBottom: 4,
   },
-  placeRating: {
+  ratingScoreText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  starRow: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  reviewsCountText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  categorySubText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  statusAndHoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  openStatusText: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.textDark,
+    color: '#059669',
   },
-  placeCategory: {
-    fontSize: 11,
-    color: COLORS.textMedium,
+  hoursText: {
+    fontSize: 12,
+    color: '#4B5563',
   },
-  placeDistance: {
-    fontSize: 11,
-    color: COLORS.primary,
-    fontWeight: '700',
+  distanceBadge: {
+    fontSize: 12,
+    color: '#4B5563',
   },
-  placeAddress: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    marginTop: 2,
+  placeHeroThumbnail: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
   },
-  placeActions: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 8,
-  },
-  directionsBtn: {
+  actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#2563EB',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#F3F4F6',
   },
-  directionsBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  checkInBtn: {
-    flexDirection: 'row',
+  googleActionBtn: {
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
   },
-  checkInBtnDone: {
-    backgroundColor: '#ECFDF5',
-  },
-  checkInBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  meetupBtn: {
+  actionIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 6,
   },
-  meetupBtnText: {
+  actionBtnLabel: {
     fontSize: 11,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  sheetTabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sheetTabItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  sheetTabItemActive: {
+    borderBottomColor: '#1A73E8',
+  },
+  sheetTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  sheetTabTextActive: {
+    color: '#1A73E8',
     fontWeight: '700',
-    color: COLORS.primary,
+  },
+  sheetBodyScroll: {
+    paddingVertical: 10,
+  },
+  tabContentWrap: {
+    gap: 8,
+    paddingBottom: 15,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoRowText: {
+    fontSize: 13,
+    color: '#374151',
+    flex: 1,
+  },
+  placeDescription: {
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  facilitiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  facilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  facilityText: {
+    fontSize: 11,
+    color: '#065F46',
+    fontWeight: '500',
+  },
+  sourceBadgeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    padding: 8,
+    borderRadius: 10,
+    gap: 6,
+    marginTop: 6,
+  },
+  sourceBadgeText: {
+    fontSize: 11,
+    color: '#0369A1',
+    fontWeight: '600',
+  },
+  reviewSummaryBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  reviewBigRating: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#1F2937',
+  },
+  reviewSubText: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  reviewCardItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+  },
+  reviewAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  reviewAuthorName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  reviewTimeAgo: {
+    fontSize: 10,
+    color: '#9CA3AF',
+  },
+  ratingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#059669',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    gap: 2,
+  },
+  ratingPillText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  reviewContent: {
+    fontSize: 12,
+    color: '#4B5563',
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 15,
+  },
+  galleryImage: {
+    width: (SCREEN_WIDTH - 48) / 2,
+    height: 100,
+    borderRadius: 10,
+  },
+  wishDetailOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    ...SHADOWS.md,
+    zIndex: 45,
   },
   wishDetailCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#FECACA',
-    ...SHADOWS.md,
+    gap: 10,
   },
   wishDetailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
   },
   wishDetailAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   wishDetailUser: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.textDark,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   wishTrustBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
     backgroundColor: '#ECFDF5',
-    borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
   },
   wishTrustText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#059669',
   },
   wishDetailTime: {
-    fontSize: 11,
-    color: COLORS.textMedium,
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
   wishTargetBlock: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     backgroundColor: '#FEF2F2',
+    padding: 10,
     borderRadius: 10,
-    padding: 8,
-    marginBottom: 8,
+    gap: 6,
   },
   wishTargetDestination: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#DC2626',
+    flex: 1,
   },
   wishDetailNote: {
-    fontSize: 12,
-    color: COLORS.textMedium,
+    fontSize: 13,
+    color: '#4B5563',
     fontStyle: 'italic',
     lineHeight: 18,
-    marginBottom: 10,
   },
   wishActionRow: {
-    flexDirection: 'row',
+    marginTop: 4,
   },
   connectWishBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#FF385C',
+    paddingVertical: 12,
     borderRadius: 12,
-    paddingVertical: 10,
+    gap: 6,
+    ...SHADOWS.sm,
   },
   connectWishBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
     color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  provinceModalBox: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 16,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1F2937',
+  },
+  modalSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 12,
+    gap: 8,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  provinceListScroll: {
+    paddingBottom: 20,
+  },
+  provinceItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  provinceItemRowActive: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+  },
+  provinceThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+  },
+  provinceNameText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  provinceRegionText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
 });

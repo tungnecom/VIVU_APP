@@ -639,10 +639,62 @@ graph TB
 | **Sprint 12** | **Xác Thực Thực Tế (Google, Apple & SMS OTP Thật)** | [auth.routes.ts](file:///d:/vivudemo1/backend/src/modules/auth/auth.routes.ts)<br>[OtpVerificationScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/OtpVerificationScreen.tsx)<br>[LoginScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/LoginScreen.tsx)<br>[RegisterScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/RegisterScreen.tsx) | Gửi mã OTP 6 số về thiết bị (SMS Gateway) đếm ngược 60s, đăng nhập Google & Apple thật, cộng +20đ uy tín. | ✅ **ĐÃ HOÀN THÀNH** |
 | **Sprint 13** | **Tạo Bài Viết Video Có Âm Thanh & Album Ảnh HD** | [CreatePostScreen.tsx](file:///d:/vivudemo1/src/screens/feed/CreatePostScreen.tsx)<br>[HomeFeedScreen.tsx](file:///d:/vivudemo1/src/screens/feed/HomeFeedScreen.tsx)<br>[feed.routes.ts](file:///d:/vivudemo1/backend/src/modules/feed/feed.routes.ts) | Tải lên video có tiếng kèm nút bật/tắt âm thanh, chọn ảnh HD, gắn thẻ quán ăn/di tích cào thật (Wikidata/ShopeeFood/GrabFood), tuyển cạ vi vu. | ✅ **ĐÃ HOÀN THÀNH** |
 | **Sprint 14** | **Bản Đồ GPS Thực Tế & Hồ Sơ Cá Nhân Đỉnh Cao** | [MapScreen.tsx](file:///d:/vivudemo1/src/screens/discovery/MapScreen.tsx)<br>[ProfileScreen.tsx](file:///d:/vivudemo1/src/screens/profile/ProfileScreen.tsx)<br>[authStore.ts](file:///d:/vivudemo1/src/stores/authStore.ts) | GPS thiết bị thật, tính khoảng cách Haversine tức thì, hồ sơ cao cấp với ảnh bìa Panorama, hào quang gradient uy tín, 3 tab media/trips/reviews, audit log sheet. | ✅ **ĐÃ HOÀN THÀNH** |
+| **Sprint 15** | **Khắc phục Triệt để Trình phát Video Âm thanh & Bộ cào Quốc gia Toàn diện (63 Tỉnh thành, Huyện xã, 5 nhóm địa điểm)** | [safeAV.tsx](file:///d:/vivudemo1/src/utils/safeAV.tsx)<br>[full_vietnam_crawler.service.ts](file:///d:/vivudemo1/backend/src/modules/crawler/full_vietnam_crawler.service.ts)<br>[fullVietnamData.ts](file:///d:/vivudemo1/src/services/fullVietnamData.ts) | Video phát mượt 100% kèm âm thanh rõ nét đa nguồn (HTML5 WebView + Media fallback), bộ cào phủ sóng 63 tỉnh thành & quận huyện trọng điểm (Ẩm thực, Di tích, Khách sạn/Resort, Trường học, Vui chơi). | 🔄 **ĐANG TRIỂN KHAI** |
+| **Sprint 16** | **Nâng Cấp Giao Diện Map Mô Phỏng 1:1 Google Maps & Đồng Bộ Nguyện Vọng Cạ Cứng** | [MapScreen.tsx](file:///d:/vivudemo1/src/screens/discovery/MapScreen.tsx)<br>[CreatePostScreen.tsx](file:///d:/vivudemo1/src/screens/feed/CreatePostScreen.tsx)<br>[feedStore.ts](file:///d:/vivudemo1/src/stores/feedStore.ts) | Giao diện chuẩn 1:1 Google Maps (Thanh tìm kiếm nổi, filter chips, nút Layer vệ tinh, nút GPS định vị, Bottom Sheet chi tiết địa điểm kéo vuốt với hotline/chỉ đường/đánh giá), hiển thị nguyện vọng cạ cứng đồng bộ trên bản đồ. | 🔄 **ĐANG TRIỂN KHAI** |
 
 ---
 
-*Hệ sinh thái VIVU đã hoàn thiện toàn diện tất cả các tính năng dữ liệu thật và sẵn sàng vận hành.*
+### 10.10. BẢNG PHÂN TÍCH TOÀN DIỆN CÁC TÍNH NĂNG CẦN NÂNG CẤP CHUYÊN SÂU
+
+Dưới đây là kết quả rà soát thực tế toàn bộ hệ thống nhằm giải quyết triệt để tình trạng các tính năng còn sơ sài hoặc chưa hoạt động trơn tru:
+
+| STT | Tính Năng / Màn Hình | Hiện Trạng Sơ Sài / Lỗi Gặp Phải | Nguyên Nhân Kỹ Thuật | Kế Hoạch & Giải Pháp Nâng Cấp Triệt Để | Trạng Thái |
+| :---: | :--- | :--- | :--- | :--- | :---: |
+| 1 | **Trình phát Video & Âm thanh Feed** | Video bị màn hình đen, không phát được hoặc không có âm thanh trên máy thật; nút bật tiếng không kích hoạt loa. | Expo Go không hỗ trợ `ExponentAV` native module; Chromium WebView chặn autoplay khi có tiếng (`unmuted`); CDN googleapis bị chậm tại VN. | Tái cấu trúc `safeAV.tsx` dùng HTML5 Video Player tối ưu, kích hoạt `mediaPlaybackRequiresUserAction={false}`, cho phép user 1-chạm bật tiếng tức thì, bổ sung modal Fullscreen HD và dàn CDN video tốc độ cao tại VN. | 🚀 **Đang triển khai** |
+| 2 | **Bộ Dữ liệu Quốc gia (Full Vietnam)** | Dữ liệu địa điểm trước đây mới có ở vài thành phố lớn, thiếu trường học, chợ truyền thống, huyện/xã ngoại ô. | Chưa có tệp cào tổng hợp toàn diện 63 tỉnh thành và 5 nhóm phân loại lớn của Google Maps. | Xây dựng `full_vietnam_crawler.service.ts` & `fullVietnamData.ts` tích hợp 63 tỉnh thành, các quận/huyện trọng điểm, cùng hàng ngàn địa danh (Ẩm thực, Du lịch, Khách sạn, Trường học, Vui chơi). | 🚀 **Đang triển khai** |
+| 3 | **Giao diện Bản đồ (Map Screen)** | Giao diện bản đồ còn dạng cơ bản, chưa trực quan, thiếu các tiện ích định vị và tra cứu chi tiết như Google Maps. | Chưa mô phỏng theo chuẩn UI/UX của Google Maps (floating search bar, category chips, bottom sheet trượt, layer switcher). | Nâng cấp `MapScreen.tsx` mô phỏng 1:1 Google Maps: Thanh tìm kiếm Google Maps nổi, category pills (Nhà hàng, Cafe, Khách sạn, Trường học, Vui chơi, Nguyện vọng), nút Vị trí của tôi, nút Vệ tinh, Bottom Sheet kéo trượt chi tiết có Gọi điện và Chỉ đường thật. | 🚀 **Đang triển khai** |
+| 4 | **Đồng bộ Nguyện Vọng Cạ Cứng lên Map** | Người dùng đăng bài nguyện vọng "muốn đi đâu đó" nhưng bản đồ không hiển thị điểm đến và avatar của họ. | Thiếu cầu nối thời gian thực giữa `useFeedStore` và tầng Marker của bản đồ. | Tự động đồng bộ các bài đăng `isWish` hoặc `isRecruitment` từ Feed lên Map dưới dạng các Pin Avatar phát sáng (radar beacon) kèm bong bóng hội thoại, cho phép bấm vào để ghép cạ trực tiếp. | 🚀 **Đang triển khai** |
+| 5 | **Đăng bài & Quản lý bài viết** | Đăng bài xong còn hiện popup xác nhận chặn luồng, chưa có nút xóa bài viết trực tiếp trên feed. | Dialog alert chặn tiến trình; Store chưa có action xóa bài và menu 3 chấm trên thẻ bài viết. | Thêm chức năng xóa bài viết với dialog xác nhận trong `HomeFeedScreen.tsx`; tối ưu `CreatePostScreen.tsx` đăng xong thoát ngay về feed tức thì. | ✅ **Đã hoàn thành** |
+
+---
+
+### 11. KẾ HOẠCH NÂNG CẤP CHI TIẾT SPRINT 15 & 16
+
+#### 11.1. Xử lý triệt để Trình phát Video kèm Âm thanh (Sprint 15)
+- **Vấn đề cốt lõi**: `expo-av` lỗi `Cannot find native module ExponentAV` trong Expo Go; các link video ngoài mạng bị chặn hoặc không tự chạy âm thanh trên WebView Android do chính sách Autoplay bảo mật của thiết bị di động.
+- **Giải pháp dứt điểm**:
+  1. Sử dụng bộ video player HTML5 tùy biến chạy trong WebView:
+     - Tự động thiết lập `allowsInlineMediaPlayback={true}`, `mediaPlaybackRequiresUserAction={false}`, `javaScriptEnabled={true}`, `domStorageEnabled={true}`, `allowFileAccess={true}`, `mixedContentMode="always"`.
+     - Cung cấp nút Bật tiếng / Tắt tiếng (Unmute/Mute) rõ ràng ở góc video kèm thanh tiến trình (progress bar) và nút Play to chính giữa.
+     - Hỗ trợ nhiều nguồn phát dự phòng CDN chất lượng cao (H.264 mp4, webm) đảm bảo mọi mạng viễn thông tại Việt Nam (Viettel, VNPT, FPT) đều tải ngay lập tức.
+     - Hỗ trợ chế độ xem toàn màn hình (Fullscreen Modal) để người dùng xem video chuẩn HD kèm âm thanh sống động.
+
+#### 11.2. Bộ cào Dữ liệu Toàn quốc 63 Tỉnh Thành & Huyện Xã (Sprint 15)
+- Tạo tệp cào tổng lực `full_vietnam_crawler.service.ts` và cơ sở dữ liệu `fullVietnamData.ts`:
+  - 63 Tỉnh / Thành phố Việt Nam với tọa độ trung tâm, mô tả và ảnh đại diện.
+  - Phân vùng theo 5 nhóm lớn y như Google Maps:
+    1. 🍽️ **Ẩm thực & Quán xá**: Nhà hàng, quán cơm, bún bò, phở gia truyền, hải sản, quán cafe view biển, cafe acoustic, trà sữa.
+    2. 🏞️ **Du lịch & Danh thắng**: Danh lam thắng cảnh, di tích lịch sử, bãi biển, chùa chiền, đền đài, bảo tàng, danh thắng quốc gia.
+    3. 🏨 **Nghỉ ngơi & Lưu trú**: Khách sạn 1-5 sao, resort ven biển, homestay thiên nhiên, nhà nghỉ.
+    4. 🏫 **Trường học & Học viện**: Các trường Đại học Quốc gia, Bách khoa, Kinh tế, Y dược, các trường THPT Chuyên.
+    5. 🎡 **Vui chơi & Giải trí**: Trung tâm thương mại, Chợ truyền thống (Bến Thành, Đồng Xuân, Chợ Cồn, Chợ Đầm...), Phố đi bộ, Chợ đêm, Bar/Club, Công viên.
+  - Mỗi địa điểm có đầy đủ: Tên, Phân loại, Địa chỉ chi tiết (Số nhà, Đường, Quận/Huyện, Tỉnh/Thành), Tọa độ Lat/Long, Số sao, Số đánh giá, Giờ mở cửa, Giá tham khảo, Số hotline liên hệ, Ảnh chụp thực tế.
+
+#### 11.3. Nâng cấp Giao diện Map Mô phỏng 1:1 Google Maps (Sprint 16)
+- **Top Bar**: Thanh tìm kiếm bo tròn nổi phía trên với biểu tượng tìm kiếm Google, ô "Tìm kiếm ở đây", nút đóng, nút đổi tỉnh thành.
+- **Filter Chips ngang**: Dải nút lọc nhanh Google Maps: `🍽️ Nhà hàng`, `☕ Quán cafe`, `🏨 Khách sạn`, `🏞️ Điểm tham quan`, `🏫 Trường học`, `🎡 Vui chơi`, `📍 Nguyện vọng cạ`.
+- **Bản đồ trực quan**: Nút chuyển Layer (Mặc định / Vệ tinh), nút GPS định vị (chấm xanh phát sáng vị trí của tôi), nút la bàn.
+- **Đồng bộ Nguyện Vọng Cạ Cứng**: Điểm ghim avatar phát sáng của các thành viên đang tuyển cạ hoặc đăng nguyện vọng đi đâu đó, bấm vào xem được thông tin và nút "Nhắn tin ghép cạ ngay".
+- **Google Maps Bottom Sheet chi tiết**:
+  - Tên địa điểm, phân loại, đánh giá ⭐⭐⭐⭐⭐ (kèm số lượng review).
+  - Tình trạng: 🟢 Đang mở cửa • Đóng cửa lúc 22:00.
+  - Hàng nút tròn thao tác nhanh: `Chỉ đường` (Xanh dương), `Bắt đầu`, `Gọi điện`, `Lưu`, `Rủ cạ đi`.
+  - Carousel ảnh lướt ngang.
+  - Tab chi tiết: `Tổng quan`, `Đánh giá`, `Ảnh`, `Tiện ích`.
+
+---
+
+*Hệ sinh thái VIVU liên tục được nâng cấp theo tiêu chuẩn trải nghiệm người dùng cao cấp nhất.*
 
 
 
