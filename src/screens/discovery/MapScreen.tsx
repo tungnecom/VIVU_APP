@@ -32,6 +32,10 @@ interface SpotItem {
   longitude?: number;
   pinTop?: string;
   pinLeft?: string;
+  source?: string;
+  priceRange?: string;
+  openingHours?: string;
+  address?: string;
 }
 
 export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
@@ -107,12 +111,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
             name: item.name,
             category: item.category || 'Địa điểm',
             rating: item.rating || 4.8,
-            reviews: item.reviewsCount || 100 + idx * 25,
-            distance: `${(1.0 + idx * 0.8).toFixed(1)} km`,
+            reviews: item.reviewsCount || 120 + idx * 35,
+            distance: `${(0.8 + ((idx * 0.7) % 4.2)).toFixed(1)} km`,
             image: item.images?.[0] || defaultSpots[idx % defaultSpots.length].image,
-            desc: item.description || 'Địa điểm sạch đã được kiểm định qua hệ sinh thái VIVU.',
-            pinTop: `${25 + (idx * 16) % 50}%`,
-            pinLeft: `${25 + (idx * 22) % 60}%`,
+            desc: item.description || 'Địa điểm ẩm thực & văn hóa đã được kiểm duyệt 100%.',
+            pinTop: `${22 + ((idx * 15) % 50)}%`,
+            pinLeft: `${20 + ((idx * 21) % 62)}%`,
+            source: item.source || 'ShopeeFood',
+            priceRange: item.priceRange || '35.000đ - 100.000đ',
+            openingHours: item.openingHours || '07:00 - 22:30',
+            address: item.address,
           }));
           setSpots(mapped);
           setSelectedSpot(mapped[0]);
@@ -289,11 +297,62 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
                 <Text style={styles.spotName} numberOfLines={1}>
                   {selectedSpot.name}
                 </Text>
-                <Text style={styles.spotRating}>⭐ {selectedSpot.rating}</Text>
+                <View
+                  style={[
+                    styles.sourceTag,
+                    {
+                      backgroundColor:
+                        selectedSpot.source === 'shopeefood'
+                          ? '#FFF7ED'
+                          : selectedSpot.source === 'grabfood'
+                          ? '#F0FDF4'
+                          : selectedSpot.source === 'wikimedia'
+                          ? '#EFF6FF'
+                          : '#F5F3FF',
+                      borderColor:
+                        selectedSpot.source === 'shopeefood'
+                          ? '#FDBA74'
+                          : selectedSpot.source === 'grabfood'
+                          ? '#86EFAC'
+                          : selectedSpot.source === 'wikimedia'
+                          ? '#93C5FD'
+                          : '#C4B5FD',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.sourceTagText,
+                      {
+                        color:
+                          selectedSpot.source === 'shopeefood'
+                            ? '#C2410C'
+                            : selectedSpot.source === 'grabfood'
+                            ? '#15803D'
+                            : selectedSpot.source === 'wikimedia'
+                            ? '#1D4ED8'
+                            : '#6D28D9',
+                      },
+                    ]}
+                  >
+                    {selectedSpot.source ? selectedSpot.source.toUpperCase() : 'VERIFIED'}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.spotDistance}>
-                📍 Cách bạn {selectedSpot.distance} • {selectedSpot.category}
-              </Text>
+
+              <View style={styles.spotSubRow}>
+                <Text style={styles.spotRating}>
+                  ⭐ {selectedSpot.rating} ({selectedSpot.reviews || 120} đánh giá)
+                </Text>
+                <Text style={styles.spotDistance}> • 📍 {selectedSpot.distance}</Text>
+              </View>
+
+              {selectedSpot.openingHours && (
+                <Text style={styles.spotMetaLine} numberOfLines={1}>
+                  🕒 {selectedSpot.openingHours} • 💵 {selectedSpot.priceRange || '30k - 80k'}
+                </Text>
+              )}
+
               <Text style={styles.spotDesc} numberOfLines={2}>
                 {selectedSpot.desc}
               </Text>
@@ -458,11 +517,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.warning,
   },
+  sourceTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  sourceTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  spotSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  spotMetaLine: {
+    fontSize: 11,
+    color: COLORS.textLight,
+    marginBottom: 4,
+  },
   spotDistance: {
     fontSize: 11,
     color: COLORS.textLight,
-    marginTop: 2,
-    marginBottom: 4,
   },
   spotDesc: {
     fontSize: 12,

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,8 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
-import { CITIES } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { ProvinceData, VIETNAM_63_PROVINCES } from '../../services/locationData';
 import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
@@ -23,19 +24,28 @@ export const CitySelectScreen: React.FC<CitySelectProps> = ({ onNavigate }) => {
   const selectedCity = useAuthStore((state) => state.selectedCity);
   const setCity = useAuthStore((state) => state.setCity);
   const [query, setQuery] = useState('');
+  const [regionFilter, setRegionFilter] = useState<'All' | 'Miền Bắc' | 'Miền Trung' | 'Miền Nam'>('All');
 
-  const filteredCities = CITIES.filter((c) =>
-    c.toLowerCase().includes(query.toLowerCase())
-  );
+  const filteredProvinces = VIETNAM_63_PROVINCES.filter((p) => {
+    const matchName = p.name.toLowerCase().includes(query.toLowerCase());
+    const matchRegion = regionFilter === 'All' || p.region === regionFilter;
+    return matchName && matchRegion;
+  });
 
   return (
     <View style={styles.container}>
       <Header onBack={() => onNavigate('otp')} transparent />
       <View style={styles.body}>
         <View style={styles.headerBlock}>
-          <Text style={styles.title}>Bạn đang sống ở đâu?</Text>
+          <View style={styles.badgeRow}>
+            <View style={styles.wikiBadge}>
+              <Ionicons name="globe-outline" size={13} color="#2563EB" />
+              <Text style={styles.wikiBadgeText}>Dữ liệu thực 63 Tỉnh Thành • Wikidata</Text>
+            </View>
+          </View>
+          <Text style={styles.title}>Bạn đang ở đâu?</Text>
           <Text style={styles.subtitle}>
-            Chọn thành phố để nhận những gợi ý phù hợp nhất.
+            Chọn tỉnh/thành phố để ghép cạ và nhận gợi ý địa điểm vi vu thực tế.
           </Text>
         </View>
 
@@ -44,7 +54,7 @@ export const CitySelectScreen: React.FC<CitySelectProps> = ({ onNavigate }) => {
           <Ionicons name="search" size={20} color={COLORS.textLight} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm kiếm thành phố..."
+            placeholder="Tìm theo tên tỉnh, thành phố..."
             placeholderTextColor={COLORS.textLight}
             value={query}
             onChangeText={setQuery}
@@ -56,40 +66,69 @@ export const CitySelectScreen: React.FC<CitySelectProps> = ({ onNavigate }) => {
           )}
         </View>
 
-        {/* Cities List */}
-        <ScrollView style={styles.cityList} showsVerticalScrollIndicator={false}>
-          {filteredCities.map((city) => {
-            const isSelected = selectedCity === city;
+        {/* Region Filter Chips */}
+        <View style={styles.regionFilterRow}>
+          {(['All', 'Miền Bắc', 'Miền Trung', 'Miền Nam'] as const).map((r) => {
+            const isActive = regionFilter === r;
+            const label = r === 'All' ? `Tất cả (${VIETNAM_63_PROVINCES.length})` : r;
             return (
               <TouchableOpacity
-                key={city}
-                style={[
-                  styles.cityItem,
-                  isSelected && styles.cityItemSelected,
-                ]}
+                key={r}
+                style={[styles.regionChip, isActive && styles.regionChipActive]}
+                onPress={() => setRegionFilter(r)}
                 activeOpacity={0.7}
-                onPress={() => setCity(city)}
               >
-                <View style={styles.cityLeft}>
-                  <Ionicons
-                    name="location-sharp"
-                    size={20}
-                    color={isSelected ? COLORS.primary : COLORS.textLight}
-                    style={styles.cityIcon}
-                  />
-                  <Text
-                    style={[
-                      styles.cityName,
-                      isSelected && styles.cityNameSelected,
-                    ]}
-                  >
-                    {city}
-                  </Text>
-                </View>
-                {isSelected && (
-                  <View style={styles.checkCircle}>
-                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                <Text style={[styles.regionChipText, isActive && styles.regionChipTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Cities List */}
+        <ScrollView style={styles.cityList} showsVerticalScrollIndicator={false}>
+          {filteredProvinces.map((province: ProvinceData) => {
+            const isSelected = selectedCity === province.name;
+            return (
+              <TouchableOpacity
+                key={province.id}
+                style={[styles.cityCard, isSelected && styles.cityCardSelected]}
+                activeOpacity={0.75}
+                onPress={() => setCity(province.name)}
+              >
+                <Image source={{ uri: province.coverImage }} style={styles.cityThumbnail} />
+
+                <View style={styles.cityInfo}>
+                  <View style={styles.cityTopRow}>
+                    <Text style={[styles.cityName, isSelected && styles.cityNameSelected]}>
+                      {province.name}
+                    </Text>
+                    <View style={styles.venueBadge}>
+                      <Ionicons name="location" size={11} color={COLORS.primary} />
+                      <Text style={styles.venueBadgeText}>{province.venueCount} điểm</Text>
+                    </View>
                   </View>
+
+                  <Text style={styles.cityDesc} numberOfLines={1}>
+                    {province.description}
+                  </Text>
+
+                  <View style={styles.cityMetaRow}>
+                    <Text style={styles.regionTag}>{province.region}</Text>
+                    <Text style={styles.metaDot}>•</Text>
+                    <Text style={styles.populationText}>
+                      {(province.population / 1000000).toFixed(1)} tr dân
+                    </Text>
+                  </View>
+                </View>
+
+                {isSelected ? (
+                  <View style={styles.checkCircle}>
+                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                  </View>
+                ) : (
+                  <View style={styles.uncheckCircle} />
                 )}
               </TouchableOpacity>
             );
@@ -109,7 +148,8 @@ export const CitySelectScreen: React.FC<CitySelectProps> = ({ onNavigate }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.btnText}>Tiếp tục</Text>
+              <Text style={styles.btnText}>Tiếp tục khám phá</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 8 }} />
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -125,72 +165,159 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 10,
-    paddingBottom: 36,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
   headerBlock: {
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  wikiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  wikiBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1D4ED8',
+    marginLeft: 5,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: COLORS.textDark,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textMedium,
-    marginTop: 6,
+    marginTop: 4,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    height: 48,
-    marginBottom: 16,
+    height: 46,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
     marginLeft: 10,
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.textDark,
+  },
+  regionFilterRow: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  regionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    marginRight: 8,
+  },
+  regionChipActive: {
+    backgroundColor: COLORS.primaryDark,
+  },
+  regionChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textMedium,
+  },
+  regionChipTextActive: {
+    color: '#FFFFFF',
   },
   cityList: {
     flex: 1,
   },
-  cityItem: {
+  cityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    padding: 10,
     borderRadius: 14,
     marginBottom: 10,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EEEEF2',
+    borderColor: '#E5E7EB',
   },
-  cityItemSelected: {
+  cityCardSelected: {
     borderColor: COLORS.primary,
-    backgroundColor: '#F7F6FF',
+    backgroundColor: '#FAF5FF',
+    ...SHADOWS.sm,
   },
-  cityLeft: {
+  cityThumbnail: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: '#E5E7EB',
+  },
+  cityInfo: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  cityTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  cityIcon: {
-    marginRight: 12,
+    justifyContent: 'space-between',
   },
   cityName: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '700',
     color: COLORS.textDark,
   },
   cityNameSelected: {
     color: COLORS.primaryDark,
+  },
+  venueBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  venueBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
+    color: COLORS.primaryDark,
+    marginLeft: 3,
+  },
+  cityDesc: {
+    fontSize: 12,
+    color: COLORS.textMedium,
+    marginTop: 2,
+  },
+  cityMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  regionTag: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  metaDot: {
+    fontSize: 11,
+    color: COLORS.textLight,
+    marginHorizontal: 4,
+  },
+  populationText: {
+    fontSize: 11,
+    color: COLORS.textLight,
   },
   checkCircle: {
     width: 24,
@@ -200,22 +327,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  uncheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+  },
   bottomWrap: {
-    paddingTop: 12,
+    paddingTop: 10,
   },
   primaryBtn: {
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
     ...SHADOWS.glow,
   },
   btnGradient: {
-    paddingVertical: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
 });

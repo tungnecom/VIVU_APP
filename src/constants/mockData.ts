@@ -1,15 +1,7 @@
 import { ActivityItem, ConversationItem, GroupItem, PostItem, UserProfile } from '../types';
+import { CITIES_63 } from '../services/locationData';
 
-export const CITIES = [
-  'Đà Nẵng',
-  'Hà Nội',
-  'TP. Hồ Chí Minh',
-  'Hải Phòng',
-  'Cần Thơ',
-  'Huế',
-  'Nha Trang',
-  'Khác',
-];
+export const CITIES = CITIES_63;
 
 export const GOALS = [
   { id: '1', title: 'Làm quen bạn mới', icon: 'person-add', desc: 'Mở rộng vòng kết nối bạn bè' },
