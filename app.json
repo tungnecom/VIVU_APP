@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "vivudemo1",
-    "slug": "vivudemo1",
+    "name": "VIVU - Đi đâu cũng có bạn",
+    "slug": "vivu",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -20,6 +20,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
