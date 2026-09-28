@@ -13,7 +13,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { MOCK_ACTIVITY } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useActivityStore } from '../../stores/activityStore';
 import { ScreenKey } from '../../types';
+
 
 interface ActivityDetailProps {
   onNavigate: (screen: ScreenKey) => void;
@@ -21,15 +23,17 @@ interface ActivityDetailProps {
 
 export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'desc' | 'members' | 'chat'>('desc');
-  const [isJoined, setIsJoined] = useState(false);
+  const isJoined = useActivityStore((state) => state.isJoined);
+  const toggleJoinActivity = useActivityStore((state) => state.toggleJoinActivity);
+  const activity = useActivityStore((state) => state.currentActivity);
 
   const handleJoin = () => {
-    setIsJoined(!isJoined);
+    toggleJoinActivity();
     Alert.alert(
       isJoined ? 'Đã hủy tham gia' : 'Thành công!',
       isJoined
         ? 'Bạn đã rời khỏi hoạt động này.'
-        : 'Bạn đã đăng ký tham gia "Food tour Đà Nẵng"! Hãy chuẩn bị đúng giờ nhé 🎉'
+        : `Bạn đã đăng ký tham gia "${activity.title}"! Hãy chuẩn bị đúng giờ nhé 🎉`
     );
   };
 

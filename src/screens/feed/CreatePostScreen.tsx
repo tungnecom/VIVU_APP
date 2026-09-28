@@ -14,13 +14,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { CURRENT_USER } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
-import { ScreenKey } from '../../types';
+import { useAuthStore } from '../../stores/authStore';
+import { useFeedStore } from '../../stores/feedStore';
+import { PostItem, ScreenKey } from '../../types';
 
 interface CreatePostProps {
   onNavigate: (screen: ScreenKey) => void;
 }
 
 export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
+  const addPost = useFeedStore((state) => state.addPost);
+  const currentUser = useAuthStore((state) => state.user) || CURRENT_USER;
+
   const [content, setContent] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('Hải Châu, Đà Nẵng');
   const [selectedTime, setSelectedTime] = useState('Thứ 7, 25/05/2025 - 17:00');
@@ -31,8 +36,38 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
   ]);
 
   const handlePost = () => {
+    if (!content.trim() && images.length === 0) {
+      Alert.alert('Thông báo', 'Vui lòng nhập nội dung hoặc thêm ảnh.');
+      return;
+    }
+
+    const newPost: PostItem = {
+      id: 'post_' + Date.now(),
+      author: {
+        id: currentUser.id,
+        name: currentUser.name,
+        avatar: currentUser.avatar,
+        location: selectedLocation || 'Đà Nẵng',
+      },
+      timeAgo: 'Vừa xong',
+      content: content.trim() || 'Chào mọi người, cùng đi trải nghiệm nhé! ✨',
+      images,
+      hashtags: selectedTags,
+      likes: 0,
+      commentsCount: 0,
+      sharesCount: 0,
+      activitySnippet: selectedLocation
+        ? {
+            location: selectedLocation,
+            time: selectedTime,
+            slots: selectedSlots,
+          }
+        : undefined,
+    };
+
+    addPost(newPost);
     Alert.alert('Thành công', 'Bài viết của bạn đã được đăng lên VIVU Feed!', [
-      { text: 'OK', onPress: () => onNavigate('home_feed') },
+      { text: 'Xem bài viết', onPress: () => onNavigate('home_feed') },
     ]);
   };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -13,15 +13,32 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../../components/Header';
 import { COLORS } from '../../constants/theme';
+import { ApiClient } from '../../services/api';
+import { socketService } from '../../services/socket';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface GroupChatProps {
   onNavigate: (screen: ScreenKey) => void;
 }
 
+interface GroupMessage {
+  id: string;
+  sender: string;
+  avatar: string;
+  text: string;
+  time: string;
+  isMe: boolean;
+  isBot?: boolean;
+}
+
 export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState([
+  const user = useAuthStore((s) => s.user);
+  const selectedCity = useAuthStore((s) => s.selectedCity) || 'Đà Nẵng';
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const [messages, setMessages] = useState<GroupMessage[]>([
     {
       id: '1',
       sender: 'Minh Thư',
@@ -42,27 +59,90 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
       id: '3',
       sender: 'ViVi (Trợ lý)',
       avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
-      text: '✨ ViVi gợi ý: Quán Bánh tráng thịt heo ở Hải Châu đang được đánh giá 4.8⭐. Các bạn có muốn mình tạo cuộc hẹn nhóm ngay tại đây không?',
+      text: `✨ ViVi gợi ý: Quán Bánh tráng thịt heo ở Hải Châu (${selectedCity}) đang được đánh giá 4.8⭐. Các bạn có muốn mình tạo cuộc hẹn nhóm ngay tại đây không?`,
       time: '18:18',
       isMe: false,
       isBot: true,
     },
   ]);
 
-  const handleSend = () => {
+  const ROOM_ID = 'group_foodie_danang';
+
+  useEffect(() => {
+    socketService.connect(user?.id || 'u_me');
+    socketService.joinRoom(ROOM_ID, {
+      id: user?.id || 'u_me',
+      name: user?.name || 'Tùng (Bạn)',
+    });
+
+    socketService.onReceiveMessage((incoming) => {
+      if (incoming.senderId !== (user?.id || 'u_me')) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: incoming.id || Date.now().toString(),
+            sender: incoming.senderName || 'Thành viên',
+            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+            text: incoming.text,
+            time: incoming.time || 'Vừa xong',
+            isMe: false,
+            isBot: incoming.isBot,
+          },
+        ]);
+      }
+    });
+
+    return () => {
+      socketService.offReceiveMessage();
+      socketService.leaveRoom(ROOM_ID);
+    };
+  }, []);
+
+  const handleSend = async () => {
     if (!inputText.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        sender: 'Tùng (Bạn)',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-        text: inputText.trim(),
-        time: 'Vừa xong',
-        isMe: true,
-      },
-    ]);
+    const textToSend = inputText.trim();
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const newMsg: GroupMessage = {
+      id: Date.now().toString(),
+      sender: `${user?.name || 'Tùng'} (Bạn)`,
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      text: textToSend,
+      time: nowTime,
+      isMe: true,
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
     setInputText('');
+
+    socketService.sendMessage(ROOM_ID, user?.id || 'u_me', user?.name || 'Bạn', textToSend);
+
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    // Nếu nhắc đến ViVi hoặc hỏi địa điểm
+    if (textToSend.toLowerCase().includes('vivi') || textToSend.toLowerCase().includes('quán nào') || textToSend.toLowerCase().includes('ăn gì')) {
+      setTimeout(async () => {
+        const res = await ApiClient.askViVi(textToSend, selectedCity);
+        const botReply = res?.data?.reply || `ViVi đề xuất quán Bún chả cá 109 Nguyễn Chí Thanh hoặc Chè sầu Liên cực ngon ở ${selectedCity} cho cả nhóm nhé! ✨`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            sender: 'ViVi (Trợ lý)',
+            avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
+            text: `✨ ViVi phản hồi: ${botReply}`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isMe: false,
+            isBot: true,
+          },
+        ]);
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }, 700);
+    }
   };
 
   return (
@@ -72,12 +152,17 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
     >
       <Header
         title="Foodie Đà Nẵng"
-        subtitle="24 thành viên đang hoạt động"
+        subtitle="24 thành viên • Kết nối Socket.io Real-time"
         onBack={() => onNavigate('group_detail')}
         rightIcon="call-outline"
       />
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {messages.map((m) => (
           <View
             key={m.id}
@@ -112,7 +197,11 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
               <Text
                 style={[
                   styles.msgText,
-                  m.isMe ? styles.msgTextMe : styles.msgTextOther,
+                  m.isMe
+                    ? styles.msgTextMe
+                    : m.isBot
+                    ? styles.msgTextBot
+                    : styles.msgTextOther,
                 ]}
               >
                 {m.text}
@@ -128,6 +217,17 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
             </View>
           </View>
         ))}
+
+        {/* Quick Prompt Pill */}
+        <TouchableOpacity
+          style={styles.askViViPill}
+          onPress={() => setInputText('ViVi ơi, nhóm mình nên đi ăn quán nào gần biển Mỹ Khê?')}
+        >
+          <Ionicons name="sparkles" size={14} color={COLORS.primary} />
+          <Text style={styles.askViViText}>
+            Hỏi ViVi: Gợi ý quán ngon cho nhóm gần biển Mỹ Khê
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Input Bar */}
@@ -141,7 +241,7 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
 
         <TextInput
           style={styles.input}
-          placeholder="Nhập tin nhắn vào nhóm..."
+          placeholder="Nhập tin nhắn hoặc gõ ViVi..."
           placeholderTextColor={COLORS.textLight}
           value={inputText}
           onChangeText={setInputText}
@@ -173,11 +273,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 8,
   },
-  msgRowOther: {
-    justifyContent: 'flex-start',
-  },
   msgRowMe: {
     justifyContent: 'flex-end',
+  },
+  msgRowOther: {
+    justifyContent: 'flex-start',
   },
   senderAvatar: {
     width: 34,
@@ -185,8 +285,8 @@ const styles = StyleSheet.create({
     borderRadius: 17,
   },
   bubble: {
-    maxWidth: '78%',
-    borderRadius: 16,
+    maxWidth: '75%',
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -196,28 +296,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EEEEF2',
   },
+  bubbleBot: {
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    borderBottomLeftRadius: 4,
+  },
   bubbleMe: {
     backgroundColor: COLORS.primary,
     borderBottomRightRadius: 4,
   },
-  bubbleBot: {
-    backgroundColor: '#F0EEFF',
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
-    borderBottomLeftRadius: 4,
-  },
   senderName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: COLORS.textLight,
     marginBottom: 4,
   },
   msgText: {
     fontSize: 14,
-    lineHeight: 19,
+    lineHeight: 20,
   },
   msgTextOther: {
     color: COLORS.textDark,
+  },
+  msgTextBot: {
+    color: '#581C87',
+    fontWeight: '500',
   },
   msgTextMe: {
     color: '#FFFFFF',
@@ -231,7 +335,23 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
   },
   timeTextMe: {
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  askViViPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 14,
+    padding: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    marginTop: 6,
+  },
+  askViViText: {
+    fontSize: 12,
+    color: COLORS.primaryDark,
+    fontWeight: '600',
   },
   inputBar: {
     flexDirection: 'row',

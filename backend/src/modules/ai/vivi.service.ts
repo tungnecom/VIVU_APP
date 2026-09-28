@@ -111,4 +111,56 @@ Không dùng từ sáo rỗng hoặc quá trang trọng. Trả về đúng 1 câ
       'Để mình rủ thêm bạn cùng đi cho đông vui nha.',
     ];
   }
+
+  /**
+   * Trả lời câu hỏi thông minh của người dùng về du lịch, ẩm thực, ghép cạ
+   */
+  public static async askViVi(question: string, city = 'Đà Nẵng'): Promise<string> {
+    const qLower = question.toLowerCase();
+
+    // 1. Nếu có cấu hình Gemini API Key
+    if (ENV.GEMINI_API_KEY) {
+      try {
+        const prompt = `Bạn là ViVi, trợ lý du lịch và ghép cạ trải nghiệm thông minh của ứng dụng VIVU tại Việt Nam (thành phố ${city}).
+Người dùng hỏi: "${question}"
+Hãy trả lời thật súc tích, duyên dáng, nhiệt tình, có đề xuất cụ thể (địa điểm, món ngon hoặc lời khuyên kết bạn) dưới 80 từ kèm emoji sinh động.`;
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${ENV.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data = (await response.json()) as any;
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (text) return text;
+        }
+      } catch (e) {
+        // Fallback to domain heuristics below
+      }
+    }
+
+    // 2. Fallback tri thức chuyên gia du lịch & kết nối VIVU
+    if (qLower.includes('cafe') || qLower.includes('cà phê') || qLower.includes('nước')) {
+      return `☕ Gợi ý cafe cực chill ở ${city}: Quán Nối Cafe (phong cách vintage hoài cổ), Sơn Trà Marina (view vịnh biển như Santorini thu nhỏ), hoặc Pavilion bãi biển Mỹ Khê. Bạn có thể bấm tạo hẹn để rủ bạn đi cùng nhé! 🌊`;
+    }
+    if (qLower.includes('ăn') || qLower.includes('món') || qLower.includes('quán') || qLower.includes('ẩm thực')) {
+      return `🍲 Đến ${city} nhất định phải thử: Bánh tráng thịt heo Đại Lộc/Bà Mua, Bún chả cá 109 Nguyễn Chí Thanh, Bánh xèo tôm nhảy Năm Hiền và Hải sản Năm Đảnh. Chúc bạn có bữa ăn ngon miệng cùng các bạn VIVU! 😋`;
+    }
+    if (qLower.includes('chơi') || qLower.includes('checkin') || qLower.includes('tham quan') || qLower.includes('hoàng hôn')) {
+      return `🌅 Điểm check-in hot nhất: Ngắm hoàng hôn trên Đỉnh Bàn Cờ - Bán đảo Sơn Trà, dạo cầu Tình Yêu & xem Cầu Rồng phun lửa vào 21h cuối tuần, hoặc bãi tắm Mỹ Khê lộng gió. Hãy tạo hoạt động để gom nhóm 4-6 người cùng đi cho vui nhé! 🛵`;
+    }
+    if (qLower.includes('làm quen') || qLower.includes('bắt chuyện') || qLower.includes('nhắn tin')) {
+      return `💡 Mẹo kết bạn siêu mượt: Hãy nhìn vào sở thích chung trên hồ sơ bạn ấy (ví dụ: cắm trại, cafe sách, nhiếp ảnh), sau đó hỏi về trải nghiệm gần nhất hoặc rủ tham gia một sự kiện sắp diễn ra vào cuối tuần! ✨`;
+    }
+
+    return `ViVi sẵn sàng hỗ trợ bạn khám phá ${city}! Bạn có thể hỏi mình địa điểm ăn uống, quán cafe view biển, lịch trình săn ảnh hoàng hôn hoặc cách bắt chuyện tự nhiên với các bạn cùng sở thích nhé! ✨`;
+  }
 }
+

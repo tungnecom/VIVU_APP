@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SHADOWS } from '../constants/theme';
+import { ApiClient } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
 
 interface ViViModalProps {
   visible: boolean;
@@ -25,12 +28,16 @@ export const ViViMascotModal: React.FC<ViViModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'menu' | 'chat'>('menu');
   const [inputVal, setInputVal] = useState('');
+  const [loadingAi, setLoadingAi] = useState(false);
+  const selectedCity = useAuthStore((s) => s.selectedCity) || 'Đà Nẵng';
+  const selectedInterests = useAuthStore((s) => s.selectedInterests);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'vivi' | 'user'; text: string }>>([
     {
       sender: 'vivi',
-      text: 'Chào bạn! Mình là ViVi ✨. Mình có thể giúp bạn gợi ý quán xá, viết tin nhắn làm quen mượt mà hoặc tìm cạ cứng cùng sở thích nhé!',
+      text: `Chào bạn! Mình là ViVi ✨. Mình có thể giúp bạn gợi ý quán xá tại ${selectedCity}, viết tin nhắn làm quen mượt mà hoặc tìm cạ cứng cùng sở thích nhé!`,
     },
   ]);
+
 
   const VIVI_ACTIONS = [
     {
@@ -74,10 +81,47 @@ export const ViViMascotModal: React.FC<ViViModalProps> = ({
     },
   ];
 
-  const handleActionClick = (action: typeof VIVI_ACTIONS[0]) => {
+  const handleActionClick = async (action: typeof VIVI_ACTIONS[0]) => {
     if (action.id === 'chat') {
       setActiveTab('chat');
-    } else if (action.sample) {
+      return;
+    }
+
+    if (action.id === 'icebreak' || action.id === 'write_msg') {
+      setActiveTab('chat');
+      setLoadingAi(true);
+      const res = await ApiClient.generateIcebreaker(
+        'bạn mới',
+        selectedInterests.length > 0 ? selectedInterests : ['Ẩm thực', 'Cafe'],
+        selectedCity
+      );
+      setLoadingAi(false);
+      const text = res?.data?.icebreaker || action.sample!;
+      setChatMessages((prev) => [
+        ...prev,
+        { sender: 'user', text: `ViVi gợi ý: ${action.title}` },
+        { sender: 'vivi', text },
+      ]);
+      onSelectAction?.(text);
+      return;
+    }
+
+    if (action.id === 'reply_helper') {
+      setActiveTab('chat');
+      setLoadingAi(true);
+      const res = await ApiClient.generateSmartReplies('Cuối tuần này gặp nhau ở đâu nhỉ?');
+      setLoadingAi(false);
+      const firstReply = res?.data?.[0] || action.sample!;
+      setChatMessages((prev) => [
+        ...prev,
+        { sender: 'user', text: `ViVi gợi ý: ${action.title}` },
+        { sender: 'vivi', text: `Gợi ý phản hồi hay nhất:\n👉 "${firstReply}"` },
+      ]);
+      onSelectAction?.(firstReply);
+      return;
+    }
+
+    if (action.sample) {
       setChatMessages((prev) => [
         ...prev,
         { sender: 'user', text: `ViVi gợi ý: ${action.title}` },
@@ -88,22 +132,27 @@ export const ViViMascotModal: React.FC<ViViModalProps> = ({
     }
   };
 
-  const handleSend = () => {
-    if (!inputVal.trim()) return;
+  const handleSend = async () => {
+    if (!inputVal.trim() || loadingAi) return;
     const userMsg = inputVal.trim();
     setInputVal('');
     setChatMessages((prev) => [...prev, { sender: 'user', text: userMsg }]);
+    setLoadingAi(true);
 
-    setTimeout(() => {
-      let botReply = 'Gợi ý tuyệt vời! Đà Nẵng có rất nhiều điểm thú vị, bạn có muốn mình tạo lời mời hoạt động gửi vào nhóm không? ✨';
-      if (userMsg.toLowerCase().includes('cafe') || userMsg.toLowerCase().includes('cà phê')) {
-        botReply = 'Gợi ý cafe đẹp ở Đà Nẵng: Quán Nối Cafe (phong cách vintage yên tĩnh), Sơn Trà Marina (view vịnh biển như Santorini), hoặc Pavilion Coffee view bãi biển Mỹ Khê cực chill!';
-      } else if (userMsg.toLowerCase().includes('ăn') || userMsg.toLowerCase().includes('món')) {
-        botReply = 'Ẩm thực Đà Nẵng nhất định phải thử: Bánh tráng thịt heo Bà Mua, Bún chả cá 109 Nguyễn Chí Thanh, Hải sản Năm Đảnh, hoặc chè sầu Liên!';
-      }
-      setChatMessages((prev) => [...prev, { sender: 'vivi', text: botReply }]);
-    }, 600);
+    try {
+      const res = await ApiClient.askViVi(userMsg, selectedCity);
+      const reply = res?.data?.reply || 'ViVi luôn sẵn sàng đồng hành cùng bạn trên mọi nẻo đường!';
+      setChatMessages((prev) => [...prev, { sender: 'vivi', text: reply }]);
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        { sender: 'vivi', text: 'ViVi đang ghi nhận ý kiến của bạn, cùng kết nối nhé! ✨' },
+      ]);
+    } finally {
+      setLoadingAi(false);
+    }
   };
+
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -204,10 +253,25 @@ export const ViViMascotModal: React.FC<ViViModalProps> = ({
                     </View>
                   </View>
                 ))}
+
+                {loadingAi && (
+                  <View style={[styles.chatBubbleWrap, styles.bubbleViviWrap]}>
+                    <View style={styles.viviMiniAvatar}>
+                      <Ionicons name="sparkles" size={12} color="#FFF" />
+                    </View>
+                    <View style={[styles.chatBubble, styles.bubbleVivi, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                      <Text style={[styles.chatBubbleText, styles.chatBubbleViviText, { fontStyle: 'italic', fontSize: 13 }]}>
+                        ViVi đang suy nghĩ...
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </ScrollView>
 
               {/* Chat Input */}
               <View style={styles.inputRow}>
+
                 <TextInput
                   style={styles.input}
                   placeholder="Hỏi ViVi điều gì đó..."

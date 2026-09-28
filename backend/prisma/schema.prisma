@@ -1,0 +1,260 @@
+// Prisma Schema for VIVU - Đi đâu cũng có bạn
+// Optimized for 10,000 Concurrent Users (10k CCU) + Zero-Garbage Locations + AI Matchmaking
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum ActivityStatus {
+  OPEN
+  FULL
+  COMPLETED
+  CANCELLED
+}
+
+// 1. Tài khoản Người dùng (User Account)
+model User {
+  id           String    @id @default(uuid())
+  identifier   String    @unique // Số điện thoại hoặc Email
+  passwordHash String
+  city         String    @default("Đà Nẵng")
+  trustScore   Int       @default(90) // Điểm uy tín 0 - 100
+  role         Role      @default(USER)
+  isBanned     Boolean   @default(false)
+  lastActiveAt DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  profile      Profile?
+  posts        Post[]
+  comments     Comment[]
+  activitiesHosted Activity[]
+  participations   ActivityParticipant[]
+  groupMemberships GroupMember[]
+  messagesSent     Message[]
+  reviewsWritten   Review[]
+  trustLogs        TrustLog[]
+
+  @@index([city])
+  @@index([trustScore])
+  @@index([lastActiveAt])
+}
+
+// 2. Hồ sơ cá nhân & AI Preference Vector
+model Profile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName     String
+  avatarUrl    String?
+  bio          String?
+  gender       String?
+  birthYear    Int?
+  goal         String?  // Mục tiêu: "Tìm bạn du lịch", "Food tour"...
+  interests    String[] // Mảng sở thích: ["Ẩm thực", "Phượt", "Cafe", ...]
+  socialStyle  String   @default("Cân bằng") // Hướng nội, Cân bằng, Hướng ngoại
+  isVerified   Boolean  @default(false)
+  
+  // Vector 384 chiều cho thuật toán AI Matchmaking & Cosine Similarity
+  embedding    Unsupported("vector(384)")?
+
+  updatedAt    DateTime @updatedAt
+
+  @@index([socialStyle])
+}
+
+// 3. Kho Địa Điểm Sạch (Zero-Garbage Locations)
+model Place {
+  id                  String   @id @default(uuid())
+  name                String
+  slug                String   @unique
+  category            String   // Điểm ngắm cảnh, Ẩm thực, Bãi biển, Cafe...
+  city                String   @default("Đà Nẵng")
+  address             String
+  latitude            Float
+  longitude           Float
+  rating              Float    @default(5.0)
+  reviewsCount        Int      @default(0)
+  description         String   @db.Text
+  images              String[]
+  source              String   // wikimedia, traveloka, curated
+  zeroGarbageVerified Boolean  @default(true)
+  openingHours        String?
+  priceRange          String?  // $, $$, $$$
+  amenities           String[] // Chỗ để xe, điều hòa, thanh toán thẻ...
+
+  // Vector 384 chiều cho tìm kiếm ngữ nghĩa lai (Hybrid Semantic Search)
+  embedding           Unsupported("vector(384)")?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  reviews             Review[]
+
+  @@index([city, category])
+  @@index([rating])
+  @@index([latitude, longitude])
+}
+
+// 4. Đánh giá Địa điểm (Reviews)
+model Review {
+  id               String   @id @default(uuid())
+  placeId          String
+  place            Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating           Int      @default(5) // 1 - 5 sao
+  comment          String   @db.Text
+  photos           String[]
+  trustScoreEarned Int      @default(5)
+  createdAt        DateTime @default(now())
+
+  @@index([placeId, createdAt])
+}
+
+// 5. Hoạt động & Kèo rủ rê (Activities)
+model Activity {
+  id              String         @id @default(uuid())
+  title           String
+  category        String         // Ăn uống, Khám phá, Cafe, Thể thao...
+  city            String         @default("Đà Nẵng")
+  date            String
+  time            String
+  location        String
+  latitude        Float?
+  longitude       Float?
+  joinedCount     Int            @default(1)
+  maxCount        Int            @default(8)
+  image           String
+  description     String         @db.Text
+  tags            String[]
+  status          ActivityStatus @default(OPEN)
+  hostId          String
+  host            User           @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  participants    ActivityParticipant[]
+
+  @@index([city, status])
+  @@index([createdAt])
+}
+
+// 6. Thành viên tham gia Kèo (Participants)
+model ActivityParticipant {
+  id         String   @id @default(uuid())
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       String   @default("Thành viên") // "Trưởng nhóm", "Thành viên"
+  checkedIn  Boolean  @default(false) // Check-in GPS thực tế để cộng Điểm Uy Tín
+  joinedAt   DateTime @default(now())
+
+  @@unique([activityId, userId])
+  @@index([userId])
+}
+
+// 7. Nhóm cộng đồng (Groups)
+model Group {
+  id             String        @id @default(uuid())
+  name           String
+  city           String        @default("Đà Nẵng")
+  avatarUrl      String
+  coverImageUrl  String
+  description    String        @db.Text
+  tags           String[]
+  membersCount   Int           @default(1)
+  creatorId      String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  members        GroupMember[]
+
+  @@index([city])
+}
+
+// 8. Thành viên nhóm (Group Members)
+model GroupMember {
+  id       String   @id @default(uuid())
+  groupId  String
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("Thành viên")
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+}
+
+// 9. Bảng tin chia sẻ (Posts & Feed)
+model Post {
+  id            String    @id @default(uuid())
+  authorId      String
+  author        User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  city          String    @default("Đà Nẵng")
+  content       String    @db.Text
+  images        String[]
+  hashtags      String[]
+  likesCount    Int       @default(0)
+  commentsCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  comments      Comment[]
+
+  @@index([city, createdAt])
+}
+
+// 10. Bình luận bài viết (Comments)
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+// 11. Tin nhắn Realtime (Messages)
+model Message {
+  id        String   @id @default(uuid())
+  roomId    String   // ID phòng chat 1-1 hoặc nhóm
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
+  mediaUrl  String?
+  isBot     Boolean  @default(false)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([roomId, createdAt])
+}
+
+// 12. Nhật ký Điểm Uy Tín Minh Bạch (Trust Score Audit Log)
+model TrustLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delta     Int      // +30, -50, +5...
+  reason    String   // "Check-in sự kiện đúng giờ", "Báo cáo nội dung xấu"...
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

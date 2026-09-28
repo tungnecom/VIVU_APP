@@ -61,3 +61,23 @@ viviRouter.get('/search', async (req: Request, res: Response) => {
     data: results,
   });
 });
+
+// 4. Trò chuyện & Hỏi đáp trực tiếp cùng ViVi
+viviRouter.post('/ask', async (req: Request, res: Response) => {
+  const question = (req.body.question as string) || '';
+  const city = (req.body.city as string) || 'Đà Nẵng';
+
+  if (!question.trim()) {
+    res.status(400).json({ success: false, message: 'Câu hỏi không được để trống.' });
+    return;
+  }
+
+  const reply = await ViViAIService.askViVi(question, city);
+  res.json({
+    success: true,
+    data: {
+      reply,
+    },
+  });
+});
+

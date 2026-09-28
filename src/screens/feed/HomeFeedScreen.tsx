@@ -21,16 +21,22 @@ interface HomeFeedProps {
   onOpenQuickSwitcher: () => void;
 }
 
+import { useAuthStore } from '../../stores/authStore';
+import { useFeedStore } from '../../stores/feedStore';
+
 export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   onNavigate,
   onOpenQuickSwitcher,
 }) => {
   const [showViVi, setShowViVi] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('Ăn uống');
-  const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({
-    p1: false,
-    p2: true,
-  });
+  const posts = useFeedStore((state) => state.posts);
+  const likedPostIds = useFeedStore((state) => state.likedPostIds);
+  const toggleLike = useFeedStore((state) => state.toggleLike);
+  const activeCategory = useFeedStore((state) => state.activeCategory);
+  const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
+
+  const selectedCity = useAuthStore((state) => state.selectedCity);
+  const currentUser = useAuthStore((state) => state.user) || CURRENT_USER;
 
   const categories = [
     { name: 'Ăn uống', icon: 'restaurant-outline' },
@@ -40,10 +46,6 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
     { name: 'Chụp ảnh', icon: 'camera-outline' },
     { name: 'Bản đồ', icon: 'map-outline', isMap: true },
   ];
-
-  const toggleLike = (id: string) => {
-    setLikedPosts((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
 
   return (
     <View style={styles.container}>
@@ -57,7 +59,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
               onPress={() => onNavigate('city_select')}
             >
               <Ionicons name="location" size={14} color={COLORS.primary} />
-              <Text style={styles.locationText}>Đà Nẵng</Text>
+              <Text style={styles.locationText}>{selectedCity}</Text>
               <Ionicons name="chevron-down" size={12} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
@@ -91,7 +93,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
 
         <View style={styles.greetingWrap}>
           <Text style={styles.greetingTitle}>
-            Chào buổi sáng, {CURRENT_USER.name} 👋
+            Chào buổi sáng, {currentUser.name} 👋
           </Text>
           <Text style={styles.greetingSubtitle}>Hôm nay bạn muốn đi đâu?</Text>
         </View>
@@ -222,8 +224,8 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
         </View>
 
         {/* Post Cards */}
-        {MOCK_POSTS.map((post) => {
-          const isLiked = likedPosts[post.id] ?? false;
+        {posts.map((post) => {
+          const isLiked = likedPostIds[post.id] ?? false;
           return (
             <View key={post.id} style={styles.postCard}>
               {/* Author Row */}

@@ -133,4 +133,57 @@ export class ApiClient {
       return { success: false, data: [] };
     }
   }
+
+  /**
+   * 7. Hỏi đáp tư vấn trực tiếp cùng trợ lý ảo ViVi AI
+   */
+  public static async askViVi(question: string, city = 'Đà Nẵng') {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/ai/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, city }),
+      });
+      return await res.json();
+    } catch {
+      // Fallback khi offline
+      let fallback = `ViVi sẵn sàng hỗ trợ bạn khám phá ${city}! Bạn có thể hỏi địa điểm ăn uống, quán cafe view biển hoặc cách bắt chuyện tự nhiên nhé! ✨`;
+      const q = question.toLowerCase();
+      if (q.includes('cafe') || q.includes('cà phê')) {
+        fallback = `Gợi ý cafe cực chill ở ${city}: Quán Nối Cafe hoài cổ, Pavilion ngắm biển Mỹ Khê, hoặc Sơn Trà Marina view vịnh biển như Hy Lạp! ☕`;
+      } else if (q.includes('ăn') || q.includes('món')) {
+        fallback = `Đặc sản nhất định phải thử: Bánh tráng thịt heo Đại Lộc, Bún chả cá 109 Nguyễn Chí Thanh, Hải sản Năm Đảnh! 🍲`;
+      }
+      return { success: true, data: { reply: fallback } };
+    }
+  }
+
+  /**
+   * 8. Lấy danh sách các địa điểm sạch (Zero-Garbage verified)
+   */
+  public static async getPlaces(city = 'Đà Nẵng') {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/crawler/places?city=${encodeURIComponent(city)}`);
+      return await res.json();
+    } catch {
+      return { success: false, data: [] };
+    }
+  }
+
+  /**
+   * 9. Kích hoạt thu thập & làm sạch dữ liệu địa điểm từ Wikimedia & Traveloka
+   */
+  public static async ingestPlaces(city = 'Đà Nẵng') {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/crawler/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ city }),
+      });
+      return await res.json();
+    } catch {
+      return { success: false, message: 'Offline mode: không thể kích hoạt crawler' };
+    }
+  }
 }
+

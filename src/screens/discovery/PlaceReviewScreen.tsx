@@ -2,15 +2,18 @@ import React, { useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../../components/Header';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface PlaceReviewProps {
@@ -18,6 +21,11 @@ interface PlaceReviewProps {
 }
 
 export const PlaceReviewScreen: React.FC<PlaceReviewProps> = ({ onNavigate }) => {
+  const user = useAuthStore((s) => s.user);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [commentText, setCommentText] = useState('');
+
   const [reviews, setReviews] = useState([
     {
       id: '1',
@@ -32,6 +40,16 @@ export const PlaceReviewScreen: React.FC<PlaceReviewProps> = ({ onNavigate }) =>
         'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400',
       ],
     },
+    {
+      id: '2',
+      author: 'Hoàng Nam',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+      time: '5 ngày trước',
+      rating: 5,
+      comment:
+        'Đã cùng nhóm bạn trong VIVU ghé ăn thử cuối tuần trước. Phục vụ nhanh nhẹn, rau sống tươi rói nhiều loại!',
+      photos: [],
+    },
   ]);
 
   const metrics = [
@@ -42,12 +60,39 @@ export const PlaceReviewScreen: React.FC<PlaceReviewProps> = ({ onNavigate }) =>
     { label: 'Phù hợp tụ tập nhóm', score: 4.8 },
   ];
 
+  const handleSubmitReview = () => {
+    if (!commentText.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập cảm nhận đánh giá của bạn.');
+      return;
+    }
+
+    const newRev = {
+      id: Date.now().toString(),
+      author: user?.name || 'Tùng (Bạn)',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      time: 'Vừa xong',
+      rating,
+      comment: commentText.trim(),
+      photos: [],
+    };
+
+    setReviews([newRev, ...reviews]);
+    setCommentText('');
+    setModalVisible(false);
+
+    Alert.alert(
+      '🎉 Đánh giá thành công!',
+      'Cảm ơn bạn đã đóng góp đánh giá xác thực cho cộng đồng VIVU! Điểm uy tín của bạn được cộng +5 điểm (Chống thông tin rác).'
+    );
+  };
+
   return (
     <View style={styles.container}>
       <Header
         title="Đánh giá địa điểm"
         onBack={() => onNavigate('map')}
         rightIcon="share-outline"
+        onRightPress={() => Alert.alert('Chia sẻ', 'Đã sao chép liên kết địa điểm sạch!')}
       />
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -60,10 +105,14 @@ export const PlaceReviewScreen: React.FC<PlaceReviewProps> = ({ onNavigate }) =>
             style={styles.placeImage}
           />
           <View style={styles.placeOverlay}>
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="shield-checkmark" size={14} color="#10B981" />
+              <Text style={styles.verifiedText}>Zero-Garbage Verified 100%</Text>
+            </View>
             <Text style={styles.placeName}>Quán Bánh Tráng Thịt Heo Đại Lộc</Text>
             <View style={styles.ratingRow}>
               <Text style={styles.starText}>⭐ 4.8</Text>
-              <Text style={styles.totalReviews}>(115 đánh giá từ cộng đồng VIVU)</Text>
+              <Text style={styles.totalReviews}>({reviews.length + 115} đánh giá từ cộng đồng VIVU)</Text>
             </View>
           </View>
         </View>
@@ -89,7 +138,7 @@ export const PlaceReviewScreen: React.FC<PlaceReviewProps> = ({ onNavigate }) =>
 
         {/* User Reviews List */}
         <View style={styles.reviewsSection}>
-          <Text style={styles.cardHeading}>Đánh giá gần đây</Text>
+          <Text style={styles.cardHeading}>Đánh giá gần đây ({reviews.length})</Text>
           {reviews.map((r) => (
             <View key={r.id} style={styles.reviewItem}>
               <View style={styles.reviewAuthorRow}>
@@ -106,7 +155,7 @@ export const PlaceReviewScreen: React.FC<PlaceReviewProps> = ({ onNavigate }) =>
 
               <Text style={styles.reviewComment}>{r.comment}</Text>
 
-              {r.photos && (
+              {r.photos && r.photos.length > 0 && (
                 <View style={styles.photosRow}>
                   {r.photos.map((p, pIdx) => (
                     <Image key={pIdx} source={{ uri: p }} style={styles.reviewPhoto} />
@@ -124,12 +173,56 @@ export const PlaceReviewScreen: React.FC<PlaceReviewProps> = ({ onNavigate }) =>
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.writeReviewBtn}
-          onPress={() => Alert.alert('Viết review', 'Mở giao diện đăng ảnh và chấm điểm quán!')}
+          onPress={() => setModalVisible(true)}
         >
           <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.writeReviewText}>Viết review</Text>
+          <Text style={styles.writeReviewText}>Viết review & chấm điểm</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Write Review Modal */}
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Viết đánh giá thực tế</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textDark} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.rateLabel}>Chấm điểm trải nghiệm:</Text>
+            <View style={styles.starRow}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                <TouchableOpacity key={s} onPress={() => setRating(s)}>
+                  <Ionicons
+                    name={s <= rating ? 'star' : 'star-outline'}
+                    size={32}
+                    color="#FFB800"
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Chia sẻ cảm nhận chân thật về món ăn, không gian, giá cả..."
+              placeholderTextColor={COLORS.textLight}
+              multiline
+              numberOfLines={4}
+              value={commentText}
+              onChangeText={setCommentText}
+            />
+
+            <TouchableOpacity
+              style={styles.submitBtn}
+              onPress={handleSubmitReview}
+            >
+              <Text style={styles.submitBtnText}>Gửi đánh giá (+5 Điểm Uy Tín)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -143,7 +236,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   placeHeader: {
-    height: 190,
+    height: 200,
     width: '100%',
     position: 'relative',
   },
@@ -157,7 +250,23 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  verifiedText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '700',
   },
   placeName: {
     fontSize: 18,
@@ -304,6 +413,57 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   writeReviewText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    gap: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  rateLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textDark,
+  },
+  starRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modalInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    padding: 14,
+    fontSize: 14,
+    color: COLORS.textDark,
+    textAlignVertical: 'top',
+    height: 110,
+  },
+  submitBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  submitBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
