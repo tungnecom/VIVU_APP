@@ -56,6 +56,8 @@ app.get('/health', (req, res) => {
 
 import { connectDatabase } from './config/database';
 import { crawlerRouter } from './modules/crawler/crawler.routes';
+import { PlaceCrawlerEngine } from './modules/crawler/crawler.service';
+
 
 // 5. Mount API Routes
 app.use('/api/auth', authRouter);
@@ -80,6 +82,7 @@ ChatGateway.init(io);
 const PORT = ENV.PORT;
 server.listen(PORT, async () => {
   await connectDatabase();
+  PlaceCrawlerEngine.initAutomatedCron(60);
   console.log('====================================================');
   console.log(`🚀 VIVU Backend Server đang chạy tại cổng http://localhost:${PORT}`);
   console.log(`📡 WebSocket Real-time Engine: Sẵn sàng`);
@@ -87,4 +90,5 @@ server.listen(PORT, async () => {
   console.log(`🛡️ Khả năng chịu tải: Thiết kế tối ưu cho 10,000 CCU`);
   console.log('====================================================');
 });
+
 

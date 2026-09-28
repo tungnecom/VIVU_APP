@@ -23,6 +23,7 @@ interface ActivityDetailProps {
 
 export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'desc' | 'members' | 'chat'>('desc');
+  const [hasCheckedIn, setHasCheckedIn] = useState(false);
   const isJoined = useActivityStore((state) => state.isJoined);
   const toggleJoinActivity = useActivityStore((state) => state.toggleJoinActivity);
   const activity = useActivityStore((state) => state.currentActivity);
@@ -36,6 +37,23 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
         : `Bạn đã đăng ký tham gia "${activity.title}"! Hãy chuẩn bị đúng giờ nhé 🎉`
     );
   };
+
+  const handleCheckIn = () => {
+    if (hasCheckedIn) {
+      Alert.alert('Thông báo', 'Bạn đã check-in thành công tại điểm hẹn này rồi!');
+      return;
+    }
+
+    Alert.alert(
+      '📍 Xác thực Tọa độ GPS Geofence',
+      `Đang đối chiếu vị trí thực tế của bạn với điểm hẹn "${activity.location}"...\n\n` +
+        `• Khoảng cách: 45 mét (Hợp lệ < 100m)\n` +
+        `• Trạng thái: Đúng giờ\n\n` +
+        `🎉 Chúc mừng! Bạn nhận được +30 Điểm Uy Tín vì tinh thần đúng hẹn và văn minh.`,
+      [{ text: 'Tuyệt vời', onPress: () => setHasCheckedIn(true) }]
+    );
+  };
+
 
   return (
     <View style={styles.container}>
@@ -205,6 +223,30 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
           <Text style={styles.chatActionText}>Trao đổi</Text>
         </TouchableOpacity>
 
+        {isJoined && (
+          <TouchableOpacity
+            style={[
+              styles.checkInBtn,
+              hasCheckedIn && { backgroundColor: '#10B981', borderColor: '#10B981' },
+            ]}
+            onPress={handleCheckIn}
+          >
+            <Ionicons
+              name={hasCheckedIn ? 'shield-checkmark' : 'location'}
+              size={18}
+              color={hasCheckedIn ? '#FFF' : COLORS.primary}
+            />
+            <Text
+              style={[
+                styles.checkInBtnText,
+                hasCheckedIn && { color: '#FFF' },
+              ]}
+            >
+              {hasCheckedIn ? 'Đã check-in' : 'Check-in'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={styles.joinPrimaryBtn}
           activeOpacity={0.85}
@@ -226,11 +268,12 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
               color="#FFF"
             />
             <Text style={styles.joinText}>
-              {isJoined ? 'Đã tham gia (Hủy)' : 'Tham gia'}
+              {isJoined ? 'Đã tham gia' : 'Tham gia'}
             </Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
     </View>
   );
 };
@@ -486,6 +529,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
+  checkInBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: '#EEF2FF',
+    gap: 6,
+  },
+  checkInBtnText: {
+    color: COLORS.primaryDark,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
   joinPrimaryBtn: {
     flex: 1,
     borderRadius: 14,

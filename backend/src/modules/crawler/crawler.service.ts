@@ -198,4 +198,27 @@ export class PlaceCrawlerEngine {
 
     return cleanedRecords;
   }
+
+  /**
+   * Lịch trình tự động kiểm tra định kỳ (Recurring Sanitization)
+   * Tự động quét và loại bỏ các địa điểm đóng cửa hoặc ảnh hỏng mỗi 60 phút
+   */
+  public static initAutomatedCron(intervalMinutes = 60) {
+    console.log(`⏱️ Đã kích hoạt Zero-Garbage Automated Cron (Chu kỳ ${intervalMinutes} phút)`);
+    setInterval(async () => {
+      try {
+        console.log('🔄 Đang chạy chu kỳ làm sạch dữ liệu địa điểm tự động định kỳ...');
+        const cities = ['Đà Nẵng', 'Hội An', 'Hà Nội', 'TP.HCM'];
+        for (const city of cities) {
+          const wiki = await this.fetchWikimediaLandmarks(city);
+          const travel = await this.fetchTravelokaHotspots(city);
+          const cleaned = await this.runZeroGarbagePipeline([...wiki, ...travel], city);
+          console.log(`✅ [Cron] Đã làm sạch tự động ${cleaned.length} địa điểm tại ${city}`);
+        }
+      } catch (err: any) {
+        console.warn('⚠️ [Cron] Lỗi trong chu kỳ làm sạch dữ liệu:', err.message);
+      }
+    }, intervalMinutes * 60 * 1000);
+  }
 }
+

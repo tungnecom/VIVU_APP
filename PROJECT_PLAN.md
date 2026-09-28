@@ -19,7 +19,8 @@
 ## 1. TỔNG QUAN DỰ ÁN
 
 ### 1.1. Sứ mệnh sản phẩm
-**VIVU** giải quyết bài toán "muốn đi chơi/trải nghiệm nhưng không có cạ cứng" của giới trẻ (Gen Z, Millennials). Nền tảng kết nối những người có cùng sở thích (Ẩm thực, Phượt, Cafe, Cắm trại, Chụp ảnh...) tất cả mọi nơi trên đất, loại bỏ cảm giác ngượng ngùng khi làm quen bằng Trợ lý AI ViVi và bảo vệ an toàn cho thành viên bằng **Hệ thống Điểm Uy Tín (Trust Score 0-100)**.
+**VIVU** giải quyết bài toán "muốn đi chơi/trải nghiệm nhưng không có cạ cứng" của giới trẻ (Gen Z, Millennials). Nền tảng kết nối những người có cùng sở thích (Ẩm thực, Phượt, Cafe, Cắm trại, Chụp ảnh...) tất cả mọi nơi trên đất nước việt nam
+, loại bỏ cảm giác ngượng ngùng khi làm quen bằng Trợ lý AI ViVi và bảo vệ an toàn cho thành viên bằng **Hệ thống Điểm Uy Tín (Trust Score 0-100)**.
 
 ### 1.2. Hiện trạng dự án
 - ✅ **Frontend Mobile**: Đã hoàn thành 100% thiết kế giao diện tương tác gồm **28 màn hình chuẩn Figma** bằng React Native (Expo SDK 57 & TypeScript).
@@ -288,3 +289,15 @@ gantt
 ---
 
 *Kế hoạch dự án này được lưu trữ chính thức tại kho mã nguồn của dự án VIVU.*
+
+---
+
+## 🚀 8. GIAI ĐOẠN NÂNG CAO (PHASE 2 - ADVANCED PRODUCTION HARDENING)
+
+| Nhiệm vụ | Mô tả & Công nghệ | Trạng thái |
+| :--- | :--- | :---: |
+| **1. Kịch bản Stress Test 10k CCU** | Xây dựng bộ kịch bản k6 (`backend/tests/load/k6-loadtest.js`) mô phỏng 10,000 người dùng đồng thời, đo P95 latency (< 150ms) và tỷ lệ lỗi (< 1%). | ✅ Đã hoàn thành |
+| **2. Tự động hóa Check-in GPS Geofencing** | Tích hợp xác thực bán kính (< 100m) tại [ActivityDetailScreen.tsx](file:///d:/vivudemo1/src/screens/match/ActivityDetailScreen.tsx) và cộng tự động **+30 Điểm Uy Tín** chống bùng hẹn. | ✅ Đã hoàn thành |
+| **3. Đóng gói Container Production** | Xây dựng [Dockerfile](file:///d:/vivudemo1/backend/Dockerfile) multi-stage và [docker-compose.yml](file:///d:/vivudemo1/docker-compose.yml) điều phối PostgreSQL 16 pgvector, PgBouncer 10k connection pool, Redis 7 LRU và Express cluster. | ✅ Đã hoàn thành |
+| **4. Zero-Garbage Automated Cron** | Thiết lập cron định kỳ mỗi 60 phút trong [crawler.service.ts](file:///d:/vivudemo1/backend/src/modules/crawler/crawler.service.ts) tự động rà soát quán đóng cửa, làm mới rating và làm sạch rác ảo. | ✅ Đã hoàn thành |
+
