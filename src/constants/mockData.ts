@@ -50,6 +50,35 @@ export const CURRENT_USER: UserProfile = {
 
 export const MOCK_POSTS: PostItem[] = [
   {
+    id: 'p3_video',
+    author: {
+      id: 'u3',
+      name: 'Lan Anh (VIVU VIP)',
+      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
+      location: 'Sơn Trà, Đà Nẵng',
+    },
+    timeAgo: '1 giờ trước',
+    content:
+      'Hoàng hôn buông xuống trên vịnh Sơn Trà Marina đẹp như Santorini thu nhỏ 🌊☕ Bật loa lên để nghe trọn tiếng sóng biển và gió đại dương nha mọi người!',
+    images: [
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
+    ],
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    videoDuration: 15,
+    hashtags: ['#SonTraMarina', '#VideoDuLich', '#ShopeeFoodTop', '#AmThanhThuc'],
+    likes: 246,
+    commentsCount: 38,
+    sharesCount: 19,
+    isLiked: false,
+    taggedVenue: {
+      id: 'dn_sontra_marina',
+      name: 'Sơn Trà Marina Cafe & Lounge',
+      address: 'Đường Hồ Xanh, Bán đảo Sơn Trà, Đà Nẵng',
+      platformSource: 'SHOPEEFOOD',
+    },
+    isRecruitment: false,
+  },
+  {
     id: 'p1',
     author: {
       id: 'u1',
@@ -58,21 +87,30 @@ export const MOCK_POSTS: PostItem[] = [
       location: 'Hải Châu, Đà Nẵng',
     },
     timeAgo: '2 giờ trước',
-    content: 'Cuối tuần tuyệt vời ở Đà Nẵng 🌊. Ai có gợi ý quán cafe view đẹp ở đây không nhỉ? ✨ Mình muốn tìm nơi yên tĩnh để vừa chill vừa ngắm hoàng hôn.',
+    content: 'Tuyển cạ cùng lượn Food Tour Đà Nẵng cuối tuần: Bánh tráng thịt heo Đại Lộc, Bún mắm nêm, Chè sầu Liên. Ai đi cùng đăng ký ngay nhé! 🍲🛵',
     images: [
       'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600',
       'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600',
-      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600',
     ],
-    hashtags: ['#CafeĐàNẵng', '#DuLịch', '#Checkin'],
+    hashtags: ['#FoodTour', '#GrabFoodReview', '#CaCungViVu'],
     likes: 128,
     commentsCount: 22,
     sharesCount: 9,
     isLiked: false,
+    taggedVenue: {
+      id: 'dn_dacsan_trang',
+      name: 'Đặc Sản Trần - Bánh Tráng Cuốn',
+      address: '04 Lê Duẩn, Hải Châu, Đà Nẵng',
+      platformSource: 'GRABFOOD',
+    },
+    isRecruitment: true,
+    recruitmentSlots: 4,
+    recruitmentJoined: 2,
     activitySnippet: {
       location: 'Hải Châu, Đà Nẵng',
-      time: 'Thứ 7, 25/05 - 17:00',
-      slots: '5 người',
+      time: 'Thứ 7, 18:00 - 21:00',
+      slots: '2/4 người',
+      budget: '150k - 200k / người',
     },
   },
   {

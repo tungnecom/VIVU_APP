@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { ApiClient } from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface LoginScreenProps {
@@ -20,9 +24,125 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
-  const [identifier, setIdentifier] = useState('tung.travel@gmail.com');
+  const [identifier, setIdentifier] = useState('0987654321');
   const [password, setPassword] = useState('••••••••');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const login = useAuthStore((s) => s.login);
+
+  // Check if identifier is phone number
+  const isPhone = /^(0|\+84)[0-9]{8,10}$/.test(identifier.trim());
+
+  // Handle standard password / phone login
+  const handleLogin = async () => {
+    if (!identifier.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại hoặc email.');
+      return;
+    }
+    setLoading(true);
+    try {
+      // If user typed phone and wants quick OTP:
+      if (isPhone) {
+        await ApiClient.sendSmsOtp(identifier.trim());
+        // update user identifier in authStore
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser) {
+          useAuthStore.setState({ user: { ...currentUser, identifier: identifier.trim(), phone: identifier.trim() } });
+        }
+        onNavigate('otp');
+        return;
+      }
+
+      // Email/password regular login
+      const dummyUser = {
+        id: 'u_logged_in',
+        name: identifier.split('@')[0] || 'VIVU Explorer',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
+        identifier: identifier.trim(),
+        trustScore: 85,
+        rating: 4.9,
+        reviewCount: 24,
+        joinDate: '01/2025',
+        badges: ['Cạ cứng du lịch', 'Thổ địa sành ăn'],
+      };
+      await login('vivu_token_' + Date.now(), dummyUser as any);
+      onNavigate('home_feed');
+    } catch {
+      onNavigate('home_feed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Quick SMS OTP login
+  const handleSmsOtpLogin = async () => {
+    if (!identifier.trim()) {
+      Alert.alert('Nhập số điện thoại', 'Vui lòng nhập số điện thoại để nhận mã OTP.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await ApiClient.sendSmsOtp(identifier.trim());
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser) {
+        useAuthStore.setState({ user: { ...currentUser, identifier: identifier.trim(), phone: identifier.trim() } });
+      }
+      Alert.alert('Đã gửi mã SMS OTP', res?.message || 'Mã xác thực 6 số đã được gửi qua SMS đến máy bạn.');
+      onNavigate('otp');
+    } catch {
+      onNavigate('otp');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Google Login
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await ApiClient.loginWithGoogle({
+        googleId: 'gg_' + Date.now(),
+        email: 'user.google@vivu.vn',
+        name: 'VIVU Traveler (Google)',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300',
+      });
+      if (res?.token && res?.user) {
+        await login(res.token, res.user);
+        Alert.alert('Đăng nhập thành công', `Chào mừng ${res.user.name || 'bạn'} qua Google!`);
+        onNavigate('home_feed');
+      } else {
+        onNavigate('home_feed');
+      }
+    } catch {
+      onNavigate('home_feed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Apple Login
+  const handleAppleLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await ApiClient.loginWithApple({
+        appleId: 'apple_' + Date.now(),
+        email: 'user.apple@privaterelay.appleid.com',
+        fullName: 'VIVU Member (Apple)',
+      });
+      if (res?.token && res?.user) {
+        await login(res.token, res.user);
+        Alert.alert('Đăng nhập thành công', `Chào mừng ${res.user.name || 'bạn'} qua Apple!`);
+        onNavigate('home_feed');
+      } else {
+        onNavigate('home_feed');
+      }
+    } catch {
+      onNavigate('home_feed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -33,18 +153,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerBlock}>
           <Text style={styles.title}>Đăng nhập</Text>
-          <Text style={styles.subtitle}>Chào mừng bạn quay trở lại!</Text>
+          <Text style={styles.subtitle}>Chào mừng bạn quay trở lại VIVU!</Text>
         </View>
 
         <View style={styles.formBlock}>
           <View style={styles.inputWrap}>
-            <Ionicons name="mail-outline" size={20} color={COLORS.textLight} style={styles.inputIcon} />
+            <Ionicons name="call-outline" size={20} color={COLORS.textLight} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="Số điện thoại hoặc email"
               placeholderTextColor={COLORS.textLight}
               value={identifier}
               onChangeText={setIdentifier}
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
           </View>
 
@@ -67,14 +189,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.forgotBtn}>
-            <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-          </TouchableOpacity>
+          <View style={styles.rowActions}>
+            <TouchableOpacity style={styles.smsOtpLink} onPress={handleSmsOtpLogin}>
+              <Ionicons name="phone-portrait-outline" size={15} color={COLORS.primary} />
+              <Text style={styles.smsOtpText}>Đăng nhập OTP SMS (+20 Uy tín)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.forgotBtn}>
+              <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={styles.primaryBtn}
             activeOpacity={0.85}
-            onPress={() => onNavigate('home_feed')}
+            onPress={handleLogin}
+            disabled={loading}
           >
             <LinearGradient
               colors={COLORS.primaryGradient}
@@ -82,7 +211,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.btnText}>Đăng nhập</Text>
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.btnText}>Đăng nhập</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
 
@@ -93,11 +226,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
           </View>
 
           <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.socialBtn}
+              activeOpacity={0.7}
+              onPress={handleGoogleLogin}
+              disabled={loading}
+            >
               <Ionicons name="logo-google" size={20} color="#EA4335" />
               <Text style={styles.socialBtnText}>Google</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.socialBtn}
+              activeOpacity={0.7}
+              onPress={handleAppleLogin}
+              disabled={loading}
+            >
               <Ionicons name="logo-apple" size={20} color="#000000" />
               <Text style={styles.socialBtnText}>Apple</Text>
             </TouchableOpacity>
@@ -161,14 +304,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.textDark,
   },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  smsOtpLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+  },
+  smsOtpText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
   forgotBtn: {
     alignSelf: 'flex-end',
     paddingVertical: 4,
   },
   forgotText: {
     fontSize: 13,
-    color: COLORS.primary,
-    fontWeight: '600',
+    color: COLORS.textLight,
+    fontWeight: '500',
   },
   primaryBtn: {
     borderRadius: 14,

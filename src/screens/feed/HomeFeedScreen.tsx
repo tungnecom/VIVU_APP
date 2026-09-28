@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { ViViMascotModal } from '../../components/ViViMascotModal';
@@ -29,6 +31,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   onOpenQuickSwitcher,
 }) => {
   const [showViVi, setShowViVi] = useState(false);
+  const [mutedVideos, setMutedVideos] = useState<Record<string, boolean>>({});
   const posts = useFeedStore((state) => state.posts);
   const likedPostIds = useFeedStore((state) => state.likedPostIds) || {};
   const likedPosts = useFeedStore((state) => state.likedPosts) || likedPostIds;
@@ -37,6 +40,12 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
   const fetchPosts = useFeedStore((state) => state.fetchPosts);
 
+  const toggleVideoMute = (postId: string) => {
+    setMutedVideos((prev) => ({
+      ...prev,
+      [postId]: prev[postId] === undefined ? true : !prev[postId],
+    }));
+  };
 
   useEffect(() => {
     fetchPosts(activeCategory);
@@ -234,6 +243,8 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
         {/* Post Cards */}
         {posts.map((post) => {
           const isLiked = likedPostIds[post.id] ?? false;
+          const isMuted = mutedVideos[post.id] ?? false;
+
           return (
             <View key={post.id} style={styles.postCard}>
               {/* Author Row */}
@@ -247,7 +258,14 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
                     style={styles.authorAvatar}
                   />
                   <View>
-                    <Text style={styles.authorName}>{post.author.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.authorName}>{post.author.name}</Text>
+                      {post.isRecruitment && (
+                        <View style={styles.recruitBadge}>
+                          <Text style={styles.recruitBadgeText}>Tuyển cạ</Text>
+                        </View>
+                      )}
+                    </View>
                     <View style={styles.postSubRow}>
                       <Text style={styles.postTime}>{post.timeAgo}</Text>
                       <Text style={styles.dot}>•</Text>
@@ -261,6 +279,19 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
                   <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.textLight} />
                 </TouchableOpacity>
               </View>
+
+              {/* Tagged Companions if any */}
+              {post.taggedCompanions && post.taggedCompanions.length > 0 && (
+                <View style={styles.feedCompanionsRow}>
+                  <Text style={styles.feedCompanionsText}>Cùng với: </Text>
+                  {post.taggedCompanions.map((comp, cIdx) => (
+                    <View key={cIdx} style={styles.feedCompanionChip}>
+                      <Image source={{ uri: comp.avatar }} style={styles.feedCompanionAvatar} />
+                      <Text style={styles.feedCompanionName}>@{comp.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               {/* Post Content */}
               <TouchableOpacity
@@ -278,8 +309,105 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
                   ))}
                 </View>
 
+                {/* Real Crawled Spot Tag Card */}
+                {post.taggedVenue && (
+                  <TouchableOpacity
+                    style={styles.feedVenueCard}
+                    activeOpacity={0.8}
+                    onPress={() => onNavigate('map')}
+                  >
+                    <View style={styles.feedVenuePlatformBadge}>
+                      <Text style={styles.feedVenuePlatformText}>
+                        {post.taggedVenue.platformSource || 'ZERO-GARBAGE'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                      <Text style={styles.feedVenueName}>{post.taggedVenue.name}</Text>
+                      <Text style={styles.feedVenueAddress} numberOfLines={1}>
+                        {post.taggedVenue.address}
+                      </Text>
+                    </View>
+                    <Ionicons name="map" size={16} color={COLORS.primary} />
+                  </TouchableOpacity>
+                )}
+
+                {/* Recruitment Trip Card if active */}
+                {post.isRecruitment && post.activitySnippet && (
+                  <View style={styles.recruitmentTripCard}>
+                    <View style={styles.recruitmentTripTop}>
+                      <View style={styles.recruitmentTripTag}>
+                        <Ionicons name="compass" size={14} color="#FFF" />
+                        <Text style={styles.recruitmentTripTagText}>Lịch trình tuyển cạ</Text>
+                      </View>
+                      <Text style={styles.recruitmentSlotsText}>
+                        Đã có {post.recruitmentJoined || 2}/{post.recruitmentSlots || 4} bạn
+                      </Text>
+                    </View>
+                    <View style={styles.recruitmentTripDetails}>
+                      <View style={styles.tripDetailRow}>
+                        <Ionicons name="time" size={14} color={COLORS.primary} />
+                        <Text style={styles.tripDetailText}>{post.activitySnippet.time}</Text>
+                      </View>
+                      {post.activitySnippet.budget && (
+                        <View style={styles.tripDetailRow}>
+                          <Ionicons name="wallet" size={14} color="#10B981" />
+                          <Text style={styles.tripDetailText}>{post.activitySnippet.budget}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.applyRecruitBtn}
+                      activeOpacity={0.8}
+                      onPress={() => Alert.alert('Đã gửi yêu cầu ghép cạ!', 'Chủ bài viết sẽ nhận được thông báo kết nối cạ cùng bạn.')}
+                    >
+                      <LinearGradient
+                        colors={COLORS.primaryGradient}
+                        style={styles.applyRecruitGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        <Ionicons name="person-add" size={14} color="#FFF" />
+                        <Text style={styles.applyRecruitText}>Đăng ký tham gia cạ này</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Rich Video Player (with sound control & audio badge) */}
+                {post.videoUrl && (
+                  <View style={styles.videoCardContainer}>
+                    <Video
+                      source={{ uri: post.videoUrl }}
+                      style={styles.feedVideo}
+                      resizeMode={ResizeMode.COVER}
+                      isLooping
+                      shouldPlay={true}
+                      isMuted={isMuted}
+                    />
+                    <TouchableOpacity
+                      style={styles.soundToggleBtn}
+                      onPress={() => toggleVideoMute(post.id)}
+                    >
+                      <Ionicons
+                        name={isMuted ? 'volume-mute' : 'volume-high'}
+                        size={16}
+                        color="#FFF"
+                      />
+                      <Text style={styles.soundToggleText}>
+                        {isMuted ? 'Bật tiếng' : 'Có tiếng'}
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={styles.videoDurationBadge}>
+                      <Ionicons name="videocam" size={12} color="#FFF" />
+                      <Text style={styles.videoDurationText}>
+                        {post.videoDuration ? `${post.videoDuration}s` : 'HD'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* Image Gallery */}
-                {post.images && post.images.length > 0 && (
+                {!post.videoUrl && post.images && post.images.length > 0 && (
                   <View style={styles.galleryContainer}>
                     <Image
                       source={{ uri: post.images[0] }}
@@ -310,7 +438,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
               >
                 <Ionicons name="sparkles" size={14} color={COLORS.primary} />
                 <Text style={styles.viviChipText}>
-                  ViVi gợi ý: Có thể hỏi Minh Thư về quán Nối Cafe góc Hải Châu!
+                  ViVi gợi ý: Có thể hỏi {post.author.name} về địa điểm và cách kết nối đi chung!
                 </Text>
               </TouchableOpacity>
 
@@ -338,7 +466,10 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
                   <Text style={styles.actionNum}>{post.commentsCount}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.actionItem}>
+                <TouchableOpacity
+                  style={styles.actionItem}
+                  onPress={() => Alert.alert('Chia sẻ', 'Đã sao chép liên kết bài viết vào bộ nhớ tạm!')}
+                >
                   <Ionicons name="share-social-outline" size={19} color={COLORS.textMedium} />
                   <Text style={styles.actionNum}>{post.sharesCount}</Text>
                 </TouchableOpacity>
@@ -767,5 +898,188 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 14,
+  },
+  recruitBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  recruitBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  feedCompanionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  feedCompanionsText: {
+    fontSize: 12,
+    color: COLORS.textMedium,
+    fontWeight: '600',
+  },
+  feedCompanionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  feedCompanionAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  feedCompanionName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primaryDark,
+  },
+  feedVenueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  feedVenuePlatformBadge: {
+    backgroundColor: '#059669',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  feedVenuePlatformText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  feedVenueName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  feedVenueAddress: {
+    fontSize: 11,
+    color: COLORS.textMedium,
+  },
+  recruitmentTripCard: {
+    backgroundColor: '#FAF5FF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    padding: 12,
+    marginBottom: 10,
+  },
+  recruitmentTripTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  recruitmentTripTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primary,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  recruitmentTripTagText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  recruitmentSlotsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  recruitmentTripDetails: {
+    gap: 4,
+    marginBottom: 10,
+  },
+  tripDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tripDetailText: {
+    fontSize: 12,
+    color: COLORS.textDark,
+    fontWeight: '500',
+  },
+  applyRecruitBtn: {
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  applyRecruitGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  applyRecruitText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  videoCardContainer: {
+    position: 'relative',
+    height: 220,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    marginBottom: 12,
+  },
+  feedVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  soundToggleBtn: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  soundToggleText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  videoDurationBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  videoDurationText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

@@ -40,6 +40,14 @@ export interface UserProfile {
   friendsCount: number;
   communicationStyle: string;
   interests: string[];
+  identifier?: string;
+  phone?: string;
+  email?: string;
+  rating?: number;
+  reviewCount?: number;
+  joinDate?: string;
+  badges?: string[];
+  coverPhoto?: string;
 }
 
 export interface PostItem {
@@ -53,6 +61,8 @@ export interface PostItem {
   timeAgo: string;
   content: string;
   images: string[];
+  videoUrl?: string;
+  videoDuration?: number;
   hashtags: string[];
   likes: number;
   commentsCount: number;
@@ -62,7 +72,22 @@ export interface PostItem {
     location: string;
     time: string;
     slots: string;
+    budget?: string;
   };
+  taggedVenue?: {
+    id: string;
+    name: string;
+    address: string;
+    platformSource?: string;
+  };
+  taggedCompanions?: Array<{
+    id: string;
+    name: string;
+    avatar: string;
+  }>;
+  isRecruitment?: boolean;
+  recruitmentSlots?: number;
+  recruitmentJoined?: number;
 }
 
 export interface ActivityItem {

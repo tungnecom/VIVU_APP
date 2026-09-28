@@ -10,10 +10,32 @@ const createPostSchema = z.object({
   body: z.object({
     content: z.string().min(1, 'Nội dung bài viết không được để trống'),
     images: z.array(z.string()).default([]),
+    videoUrl: z.string().optional(),
+    videoDuration: z.number().optional(),
     hashtags: z.array(z.string()).default([]),
     location: z.string().optional(),
     time: z.string().optional(),
     slots: z.string().optional(),
+    taggedVenue: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+        address: z.string(),
+        platformSource: z.string().optional(),
+      })
+      .optional(),
+    taggedCompanions: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          avatar: z.string(),
+        })
+      )
+      .optional(),
+    isRecruitment: z.boolean().optional(),
+    recruitmentSlots: z.number().optional(),
+    recruitmentBudget: z.string().optional(),
   }),
 });
 
@@ -34,6 +56,35 @@ feedRouter.get('/', async (req: Request, res: Response) => {
 
   const posts = [
     {
+      id: 'p3_video',
+      author: {
+        id: 'u3',
+        name: 'Lan Anh (VIVU VIP)',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
+        location: 'Sơn Trà, Đà Nẵng',
+        trustScore: 96,
+      },
+      timeAgo: '1 giờ trước',
+      content:
+        'Hoàng hôn buông xuống trên vịnh Sơn Trà Marina đẹp như Santorini thu nhỏ 🌊☕ Bật loa lên để nghe trọn tiếng sóng biển và gió đại dương nha mọi người!',
+      images: [
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
+      ],
+      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      videoDuration: 15,
+      hashtags: ['#SonTraMarina', '#VideoDuLich', '#ShopeeFoodTop', '#AmThanhThuc'],
+      likes: 246,
+      commentsCount: 38,
+      sharesCount: 19,
+      taggedVenue: {
+        id: 'dn_sontra_marina',
+        name: 'Sơn Trà Marina Cafe & Lounge',
+        address: 'Đường Hồ Xanh, Bán đảo Sơn Trà, Đà Nẵng',
+        platformSource: 'SHOPEEFOOD',
+      },
+      isRecruitment: false,
+    },
+    {
       id: 'p1',
       author: {
         id: 'u1',
@@ -44,19 +95,29 @@ feedRouter.get('/', async (req: Request, res: Response) => {
       },
       timeAgo: '2 giờ trước',
       content:
-        'Cuối tuần tuyệt vời ở Đà Nẵng 🌊. Ai có gợi ý quán cafe view đẹp ở đây không nhỉ? ✨ Mình muốn tìm nơi yên tĩnh để vừa chill vừa ngắm hoàng hôn.',
+        'Tuyển cạ cùng lượn Food Tour Đà Nẵng cuối tuần: Bánh tráng thịt heo Đại Lộc, Bún mắm nêm, Chè sầu Liên. Ai đi cùng đăng ký ngay nhé! 🍲🛵',
       images: [
         'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600',
         'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600',
       ],
-      hashtags: ['#CafeĐàNẵng', '#DuLịch', '#Checkin'],
+      hashtags: ['#CafeĐàNẵng', '#DuLịch', '#GrabFoodReview'],
       likes: 128,
       commentsCount: 22,
       sharesCount: 9,
+      taggedVenue: {
+        id: 'dn_dacsan_trang',
+        name: 'Đặc Sản Trần - Bánh Tráng Cuốn',
+        address: '04 Lê Duẩn, Hải Châu, Đà Nẵng',
+        platformSource: 'GRABFOOD',
+      },
+      isRecruitment: true,
+      recruitmentSlots: 4,
+      recruitmentJoined: 2,
       activitySnippet: {
         location: 'Hải Châu, Đà Nẵng',
-        time: 'Thứ 7, 25/05 - 17:00',
-        slots: '5 người',
+        time: 'Thứ 7, 18:00 - 21:00',
+        slots: '2/4 người',
+        budget: '150k - 200k / người',
       },
     },
     {
@@ -95,7 +156,21 @@ feedRouter.post(
   authenticateJwt,
   validateRequest(createPostSchema),
   async (req: Request, res: Response) => {
-    const { content, images, hashtags, location, time, slots } = req.body;
+    const {
+      content,
+      images,
+      videoUrl,
+      videoDuration,
+      hashtags,
+      location,
+      time,
+      slots,
+      taggedVenue,
+      taggedCompanions,
+      isRecruitment,
+      recruitmentSlots,
+      recruitmentBudget,
+    } = req.body;
 
     const newPost = {
       id: 'p_' + Date.now(),
@@ -107,12 +182,26 @@ feedRouter.post(
       },
       timeAgo: 'Vừa xong',
       content,
-      images,
-      hashtags,
+      images: images || [],
+      videoUrl,
+      videoDuration,
+      hashtags: hashtags || [],
       likes: 0,
       commentsCount: 0,
       sharesCount: 0,
-      activitySnippet: location ? { location, time, slots } : undefined,
+      taggedVenue,
+      taggedCompanions,
+      isRecruitment: !!isRecruitment,
+      recruitmentSlots,
+      recruitmentJoined: 1,
+      activitySnippet: location
+        ? {
+            location,
+            time: time || 'Hôm nay',
+            slots: slots || '4 người',
+            budget: recruitmentBudget,
+          }
+        : undefined,
     };
 
     // Invalidate cache

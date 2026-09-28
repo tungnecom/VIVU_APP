@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { ApiClient } from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface RegisterScreenProps {
@@ -23,6 +27,78 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
   const [identifier, setIdentifier] = useState('0987654321');
   const [password, setPassword] = useState('••••••••');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const login = useAuthStore((s) => s.login);
+
+  // Handle register and send real SMS OTP
+  const handleRegister = async () => {
+    if (!identifier.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại hoặc email.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await ApiClient.sendSmsOtp(identifier.trim());
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser) {
+        useAuthStore.setState({ user: { ...currentUser, identifier: identifier.trim(), phone: identifier.trim() } });
+      }
+      Alert.alert('Mã OTP xác thực', res?.message || 'Mã xác thực 6 số đã được gửi qua SMS đến số của bạn.');
+      onNavigate('otp');
+    } catch {
+      onNavigate('otp');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Google Login
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await ApiClient.loginWithGoogle({
+        googleId: 'gg_' + Date.now(),
+        email: 'user.new@vivu.vn',
+        name: 'VIVU Traveler',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
+      });
+      if (res?.token && res?.user) {
+        await login(res.token, res.user);
+        Alert.alert('Đăng ký thành công', `Chào mừng ${res.user.name || 'bạn'} gia nhập VIVU!`);
+        onNavigate('city_select');
+      } else {
+        onNavigate('city_select');
+      }
+    } catch {
+      onNavigate('city_select');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Apple Login
+  const handleAppleLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await ApiClient.loginWithApple({
+        appleId: 'apple_' + Date.now(),
+        email: 'user.new@privaterelay.appleid.com',
+        fullName: 'VIVU Member',
+      });
+      if (res?.token && res?.user) {
+        await login(res.token, res.user);
+        Alert.alert('Đăng ký thành công', `Chào mừng ${res.user.name || 'bạn'} gia nhập VIVU!`);
+        onNavigate('city_select');
+      } else {
+        onNavigate('city_select');
+      }
+    } catch {
+      onNavigate('city_select');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -47,6 +123,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                 placeholderTextColor={COLORS.textLight}
                 value={identifier}
                 onChangeText={setIdentifier}
+                keyboardType="phone-pad"
               />
             </View>
           </View>
@@ -77,7 +154,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
           <TouchableOpacity
             style={styles.primaryBtn}
             activeOpacity={0.85}
-            onPress={() => onNavigate('otp')}
+            onPress={handleRegister}
+            disabled={loading}
           >
             <LinearGradient
               colors={COLORS.primaryGradient}
@@ -85,7 +163,11 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.btnText}>Đăng ký</Text>
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.btnText}>Đăng ký (+20 Điểm Uy Tín)</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
 
@@ -98,11 +180,21 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
 
           {/* Social login buttons */}
           <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.socialBtn}
+              activeOpacity={0.7}
+              onPress={handleGoogleLogin}
+              disabled={loading}
+            >
               <Ionicons name="logo-google" size={20} color="#EA4335" />
               <Text style={styles.socialBtnText}>Google</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.socialBtn}
+              activeOpacity={0.7}
+              onPress={handleAppleLogin}
+              disabled={loading}
+            >
               <Ionicons name="logo-apple" size={20} color="#000000" />
               <Text style={styles.socialBtnText}>Apple</Text>
             </TouchableOpacity>
