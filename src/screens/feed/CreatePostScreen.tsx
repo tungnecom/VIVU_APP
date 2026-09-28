@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { CURRENT_USER } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { ApiClient } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useFeedStore } from '../../stores/feedStore';
 import { PostItem, ScreenKey } from '../../types';
@@ -25,6 +26,7 @@ interface CreatePostProps {
 export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
   const addPost = useFeedStore((state) => state.addPost);
   const currentUser = useAuthStore((state) => state.user) || CURRENT_USER;
+  const token = useAuthStore((state) => state.token);
 
   const [content, setContent] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('Hải Châu, Đà Nẵng');
@@ -35,7 +37,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
     'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500',
   ]);
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!content.trim() && images.length === 0) {
       Alert.alert('Thông báo', 'Vui lòng nhập nội dung hoặc thêm ảnh.');
       return;
@@ -65,11 +67,27 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
         : undefined,
     };
 
+    // 1. Cập nhật ngay trên mobile store (Optimistic UI)
     addPost(newPost);
+
+    // 2. Gửi đồng bộ lên backend API
+    await ApiClient.createPost(
+      {
+        content: newPost.content,
+        images: newPost.images,
+        hashtags: newPost.hashtags,
+        location: selectedLocation,
+        time: selectedTime,
+        slots: selectedSlots,
+      },
+      token || undefined
+    );
+
     Alert.alert('Thành công', 'Bài viết của bạn đã được đăng lên VIVU Feed!', [
       { text: 'Xem bài viết', onPress: () => onNavigate('home_feed') },
     ]);
   };
+
 
   return (
     <View style={styles.container}>

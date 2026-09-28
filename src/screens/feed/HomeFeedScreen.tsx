@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -34,6 +34,12 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   const toggleLike = useFeedStore((state) => state.toggleLike);
   const activeCategory = useFeedStore((state) => state.activeCategory);
   const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
+  const fetchPosts = useFeedStore((state) => state.fetchPosts);
+
+  useEffect(() => {
+    fetchPosts(activeCategory);
+  }, []);
+
 
   const selectedCity = useAuthStore((state) => state.selectedCity);
   const currentUser = useAuthStore((state) => state.user) || CURRENT_USER;

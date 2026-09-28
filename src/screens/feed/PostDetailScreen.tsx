@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../../components/Header';
 import { MOCK_POSTS } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useFeedStore } from '../../stores/feedStore';
 import { ScreenKey } from '../../types';
 
 interface PostDetailProps {
@@ -21,8 +22,11 @@ interface PostDetailProps {
 }
 
 export const PostDetailScreen: React.FC<PostDetailProps> = ({ onNavigate }) => {
-  const post = MOCK_POSTS[0];
+  const posts = useFeedStore((state) => state.posts);
+  const addComment = useFeedStore((state) => state.addComment);
+  const post = posts[0] || MOCK_POSTS[0];
   const [commentInput, setCommentInput] = useState('');
+
   const [comments, setComments] = useState([
     {
       id: 'c1',
@@ -53,8 +57,10 @@ export const PostDetailScreen: React.FC<PostDetailProps> = ({ onNavigate }) => {
       likes: 0,
     };
     setComments((prev) => [...prev, newComment]);
+    addComment(post.id);
     setCommentInput('');
   };
+
 
   return (
     <KeyboardAvoidingView

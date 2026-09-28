@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { MOCK_ACTIVITY } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { ApiClient } from '../../services/api';
 import { ScreenKey } from '../../types';
 
 interface MatchHomeProps {
@@ -22,6 +23,53 @@ interface MatchHomeProps {
 export const MatchHomeScreen: React.FC<MatchHomeProps> = ({ onNavigate }) => {
   const [activeCategory, setActiveCategory] = useState('Ăn uống');
   const [searchQuery, setSearchQuery] = useState('');
+  const [candidates, setCandidates] = useState<any[]>([
+    {
+      candidate: {
+        id: 'u1',
+        name: 'Minh Thư',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      },
+      compatibilityScore: 96,
+      distanceKm: 1.2,
+      matchReason: 'Cùng mê Food & Cafe',
+    },
+    {
+      candidate: {
+        id: 'u2',
+        name: 'Quang Anh',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      },
+      compatibilityScore: 92,
+      distanceKm: 2.5,
+      matchReason: 'Cùng mê Phượt & Hoàng hôn',
+    },
+    {
+      candidate: {
+        id: 'u3',
+        name: 'Lan Anh',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
+      },
+      compatibilityScore: 90,
+      distanceKm: 3.0,
+      matchReason: 'Cùng mê Cafe & Checkin',
+    },
+  ]);
+
+  useEffect(() => {
+    async function loadCandidates() {
+      try {
+        const res = await ApiClient.getMatchmakingCandidates();
+        if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+          setCandidates(res.data);
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    loadCandidates();
+  }, []);
+
 
   const categories = [
     { name: 'Ăn uống', icon: 'restaurant-outline' },
@@ -119,61 +167,50 @@ export const MatchHomeScreen: React.FC<MatchHomeProps> = ({ onNavigate }) => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.aiCandidatesScroll}
         >
-          {[
-            {
-              id: 'u1',
-              name: 'Minh Thư',
-              avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-              match: 96,
-              trustScore: 94,
-              reason: 'Cùng mê Food & Cafe',
-              dist: '1.2 km',
-            },
-            {
-              id: 'u2',
-              name: 'Quang Anh',
-              avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-              match: 92,
-              trustScore: 88,
-              reason: 'Cùng mê Phượt & Hoàng hôn',
-              dist: '2.5 km',
-            },
-            {
-              id: 'u3',
-              name: 'Lan Anh',
-              avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-              match: 90,
-              trustScore: 92,
-              reason: 'Cùng mê Cafe & Checkin',
-              dist: '3.0 km',
-            },
-          ].map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              style={styles.candidateCard}
-              activeOpacity={0.85}
-              onPress={() => onNavigate('personal_chat')}
-            >
-              <View style={styles.candidateAvatarWrap}>
-                <Image source={{ uri: c.avatar }} style={styles.candidateAvatar} />
-                <View style={styles.matchPill}>
-                  <Text style={styles.matchPillText}>{c.match}%</Text>
-                </View>
-              </View>
+          {candidates.map((item, idx) => {
+            const c = item.candidate || item;
+            const score = item.compatibilityScore || item.match || 90;
+            const dist = item.distanceKm ? `${item.distanceKm.toFixed(1)} km` : item.dist || '1.5 km';
+            const reason = item.matchReason || item.reason || 'Sở thích & Điểm uy tín cao';
 
-              <Text style={styles.candidateName}>{c.name}</Text>
-              <Text style={styles.candidateReason}>{c.reason}</Text>
-              <Text style={styles.candidateDist}>📍 Cách {c.dist}</Text>
-
+            return (
               <TouchableOpacity
-                style={styles.chatCandidateBtn}
+                key={c.id || idx}
+                style={styles.candidateCard}
+                activeOpacity={0.85}
                 onPress={() => onNavigate('personal_chat')}
               >
-                <Text style={styles.chatCandidateText}>Bắt chuyện</Text>
+                <View style={styles.candidateAvatarWrap}>
+                  <Image
+                    source={{
+                      uri:
+                        c.avatar ||
+                        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+                    }}
+                    style={styles.candidateAvatar}
+                  />
+                  <View style={styles.matchPill}>
+                    <Text style={styles.matchPillText}>{score}%</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.candidateName}>{c.name}</Text>
+                <Text style={styles.candidateReason} numberOfLines={1}>
+                  {reason}
+                </Text>
+                <Text style={styles.candidateDist}>📍 Cách {dist}</Text>
+
+                <TouchableOpacity
+                  style={styles.chatCandidateBtn}
+                  onPress={() => onNavigate('personal_chat')}
+                >
+                  <Text style={styles.chatCandidateText}>Bắt chuyện</Text>
+                </TouchableOpacity>
               </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
+            );
+          })}
         </ScrollView>
+
 
         {/* Section Header */}
         <View style={styles.sectionHeader}>

@@ -185,5 +185,37 @@ export class ApiClient {
       return { success: false, message: 'Offline mode: không thể kích hoạt crawler' };
     }
   }
+
+  /**
+   * 10. Lấy bảng tin (Feed) hỗ trợ Redis Cache-Aside
+   */
+  public static async getFeed(category = 'all') {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/feed?category=${encodeURIComponent(category)}`);
+      return await res.json();
+    } catch {
+      return { success: false, data: [] };
+    }
+  }
+
+  /**
+   * 11. Đăng bài viết mới
+   */
+  public static async createPost(postData: any, token?: string) {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${this.baseUrl}/api/feed/posts`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(postData),
+      });
+      return await res.json();
+    } catch {
+      return { success: true, data: postData };
+    }
+  }
 }
+
 

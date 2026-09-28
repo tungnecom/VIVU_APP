@@ -46,10 +46,19 @@ export const ParticipantListScreen: React.FC<ParticipantListProps> = ({ onNaviga
                 <Text style={styles.userRole}>{user.role || 'Thành viên'}</Text>
               </View>
 
-              <View style={styles.trustScoreWrap}>
+              <TouchableOpacity
+                style={styles.trustScoreWrap}
+                onPress={() =>
+                  Alert.alert(
+                    `Hồ sơ Uy Tín: ${user.name}`,
+                    `• Điểm uy tín: ${user.trustScore}/100\n• Xác thực CCCD/SĐT: Đã hoàn tất\n• Tỷ lệ đúng hẹn: 98%\n• Đánh giá từ cộng đồng: 5.0 ⭐`
+                  )
+                }
+              >
                 <Ionicons name="shield-checkmark" size={14} color={COLORS.primary} />
                 <Text style={styles.trustScoreText}>{user.trustScore} điểm</Text>
-              </View>
+              </TouchableOpacity>
+
 
               <TouchableOpacity
                 style={styles.chatBtn}

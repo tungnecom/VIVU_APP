@@ -1,25 +1,46 @@
 import { create } from 'zustand';
 import { MOCK_POSTS } from '../constants/mockData';
+import { ApiClient } from '../services/api';
 import { PostItem } from '../types';
 
 interface FeedState {
   posts: PostItem[];
   likedPostIds: Record<string, boolean>;
   activeCategory: string;
+  loading: boolean;
 
   // Actions
   setActiveCategory: (category: string) => void;
+  fetchPosts: (category?: string) => Promise<void>;
   toggleLike: (postId: string) => void;
   addPost: (newPost: PostItem) => void;
   addComment: (postId: string) => void;
 }
 
-export const useFeedStore = create<FeedState>((set) => ({
+export const useFeedStore = create<FeedState>((set, get) => ({
   posts: MOCK_POSTS,
   likedPostIds: { p2: true },
   activeCategory: 'Ăn uống',
+  loading: false,
 
-  setActiveCategory: (category) => set({ activeCategory: category }),
+  setActiveCategory: (category) => {
+    set({ activeCategory: category });
+    get().fetchPosts(category);
+  },
+
+  fetchPosts: async (category = 'all') => {
+    set({ loading: true });
+    try {
+      const res = await ApiClient.getFeed(category);
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        set({ posts: res.data });
+      }
+    } catch {
+      // Fallback
+    } finally {
+      set({ loading: false });
+    }
+  },
 
   toggleLike: (postId) =>
     set((state) => {
