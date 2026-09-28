@@ -79,6 +79,8 @@ export interface PostItem {
     name: string;
     address: string;
     platformSource?: string;
+    latitude?: number;
+    longitude?: number;
   };
   taggedCompanions?: Array<{
     id: string;
@@ -88,6 +90,9 @@ export interface PostItem {
   isRecruitment?: boolean;
   recruitmentSlots?: number;
   recruitmentJoined?: number;
+  isWish?: boolean;
+  wishDestination?: string;
+  wishDate?: string;
 }
 
 export interface ActivityItem {

@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
@@ -22,6 +21,7 @@ import { ApiClient } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useFeedStore } from '../../stores/feedStore';
 import { PostItem, ScreenKey } from '../../types';
+import { Video, ResizeMode } from '../../utils/safeAV';
 
 interface CreatePostProps {
   onNavigate: (screen: ScreenKey) => void;
@@ -33,8 +33,8 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
   const token = useAuthStore((state) => state.token);
   const selectedCity = useAuthStore((state) => state.selectedCity) || 'Đà Nẵng';
 
-  // Mode: 'moment' (Khoảnh khắc) vs 'recruitment' (Tuyển cạ)
-  const [postMode, setPostMode] = useState<'moment' | 'recruitment'>('moment');
+  // Mode: 'moment' (Khoảnh khắc) vs 'recruitment' (Tuyển cạ) vs 'wish' (Nguyện vọng)
+  const [postMode, setPostMode] = useState<'moment' | 'recruitment' | 'wish'>('moment');
 
   const [content, setContent] = useState('');
   const [images, setImages] = useState<string[]>([
@@ -45,9 +45,13 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
 
   // Recruitment specifics
-  const [departureTime, setDepartureTime] = useState('Thứ 7, 25/05 - 17:00');
+  const [departureTime, setDepartureTime] = useState('Thứ 7, 18:00');
   const [slotsCount, setSlotsCount] = useState('4 người');
   const [budgetEstimate, setBudgetEstimate] = useState('150k - 200k / người');
+
+  // Wish specifics
+  const [wishDestination, setWishDestination] = useState('Đèo Hải Vân & Vịnh Lăng Cô');
+  const [wishDate, setWishDate] = useState('Cuối tuần này');
 
   // Tagged Venue & Companions
   const [taggedVenue, setTaggedVenue] = useState<{
@@ -55,11 +59,15 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
     name: string;
     address: string;
     platformSource?: string;
+    latitude?: number;
+    longitude?: number;
   } | null>({
     id: 'dn_sontra_marina',
     name: 'Sơn Trà Marina Cafe & Lounge',
-    address: 'Đường Hồ Xanh, Sơn Trà, Đà Nẵng',
+    address: 'Đường Hồ Xanh, Bán đảo Sơn Trà, Đà Nẵng',
     platformSource: 'SHOPEEFOOD',
+    latitude: 16.1158,
+    longitude: 108.2536,
   });
 
   const [taggedFriends, setTaggedFriends] = useState<Array<{
@@ -74,6 +82,8 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
   // Modals for selecting venue & friends
   const [showVenueModal, setShowVenueModal] = useState(false);
   const [showFriendModal, setShowFriendModal] = useState(false);
+  const [venueSearch, setVenueSearch] = useState('');
+  const [friendSearch, setFriendSearch] = useState('');
   const [venuesList, setVenuesList] = useState<any[]>([]);
   const [friendsList, setFriendsList] = useState<any[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(false);
@@ -83,7 +93,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
   useEffect(() => {
     loadRealVenues();
     loadRealFriends();
-  }, []);
+  }, [selectedCity]);
 
   const loadRealVenues = async () => {
     setLoadingVenues(true);
@@ -92,12 +102,15 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
       if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
         setVenuesList(res.data);
       } else {
-        // Fallback default crawled items
+        // Full nationwide fallback venues
         setVenuesList([
-          { id: 'v1', name: 'Sơn Trà Marina Lounge', address: 'Đường Hồ Xanh, Sơn Trà', platformSource: 'SHOPEEFOOD' },
-          { id: 'v2', name: 'Bánh Tráng Thịt Heo Đại Lộc', address: '97 Trưng Nữ Vương, Hải Châu', platformSource: 'GRABFOOD' },
-          { id: 'v3', name: 'Đỉnh Bàn Cờ Sơn Trà', address: 'Bán đảo Sơn Trà, Đà Nẵng', platformSource: 'WIKIMEDIA' },
-          { id: 'v4', name: 'Quán Nối Cafe Hoài Cổ', address: '113/18 Nguyễn Chí Thanh', platformSource: 'TRAVELOKA' },
+          { id: 'v1', name: 'Sơn Trà Marina Lounge', address: 'Đường Hồ Xanh, Sơn Trà', platformSource: 'SHOPEEFOOD', category: 'Cafe', latitude: 16.1158, longitude: 108.2536 },
+          { id: 'v2', name: 'Bánh Tráng Thịt Heo Đại Lộc', address: '97 Trưng Nữ Vương, Hải Châu', platformSource: 'GRABFOOD', category: 'Ăn uống', latitude: 16.0633, longitude: 108.2178 },
+          { id: 'v3', name: 'Đỉnh Bàn Cờ Bán Đảo Sơn Trà', address: 'Bán đảo Sơn Trà, Đà Nẵng', platformSource: 'WIKIMEDIA', category: 'Du lịch', latitude: 16.1215, longitude: 108.2750 },
+          { id: 'v4', name: 'Quán Nối Cafe Hoài Cổ', address: '113/18 Nguyễn Chí Thanh', platformSource: 'TRAVELOKA', category: 'Cafe', latitude: 16.0712, longitude: 108.2231 },
+          { id: 'v5', name: 'Đại Học Bách Khoa Đà Nẵng', address: '54 Nguyễn Lương Bằng, Liên Chiểu', platformSource: 'WIKIMEDIA', category: 'Trường học', latitude: 16.0754, longitude: 108.1534 },
+          { id: 'v6', name: 'Khách sạn Novotel Danang Premier', address: '36 Bạch Đằng, Hải Châu', platformSource: 'TRAVELOKA', category: 'Nghỉ ngơi', latitude: 16.0772, longitude: 108.2241 },
+          { id: 'v7', name: 'Chợ Đêm Helio & Phố Ẩm Thực', address: 'Đường 2 Tháng 9, Hòa Cường Nam', platformSource: 'SHOPEEFOOD', category: 'Vui chơi', latitude: 16.0352, longitude: 108.2238 },
         ]);
       }
     } catch {
@@ -118,6 +131,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
           { id: 'f1', name: 'Minh Thư', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', trustScore: 94 },
           { id: 'f2', name: 'Quang Anh', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', trustScore: 88 },
           { id: 'f3', name: 'Lan Anh', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150', trustScore: 96 },
+          { id: 'f4', name: 'Hoàng Nam', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', trustScore: 85 },
         ]);
       }
     } catch {
@@ -178,12 +192,19 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
     setTagInput('');
   };
 
-  // Submit Post
+  // Submit Post & Immediately Exit to Home Feed!
   const handlePost = async () => {
-    if (!content.trim() && images.length === 0 && !videoUri) {
+    if (!content.trim() && images.length === 0 && !videoUri && postMode === 'moment') {
       Alert.alert('Nội dung trống', 'Vui lòng nhập nội dung, thêm ảnh hoặc video.');
       return;
     }
+
+    const targetLocName =
+      postMode === 'wish'
+        ? wishDestination
+        : taggedVenue
+        ? taggedVenue.name
+        : selectedCity;
 
     const newPost: PostItem = {
       id: 'post_' + Date.now(),
@@ -191,14 +212,20 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
         id: currentUser.id,
         name: currentUser.name,
         avatar: currentUser.avatar,
-        location: taggedVenue ? taggedVenue.name : selectedCity,
+        location: targetLocName,
       },
       timeAgo: 'Vừa xong',
-      content: content.trim() || (postMode === 'recruitment' ? 'Tuyển cạ cùng vi vu cuối tuần!' : 'Khoảnh khắc vi vu mới ✨'),
+      content:
+        content.trim() ||
+        (postMode === 'wish'
+          ? `Nguyện vọng vi vu: Muốn đến ${wishDestination}! Cần tìm bạn đồng hành cùng gu ✨`
+          : postMode === 'recruitment'
+          ? `Tuyển cạ cùng vi vu: ${departureTime} tại ${targetLocName}! Ai đi cùng đăng ký ngay nhé 🛵`
+          : 'Khoảnh khắc vi vu mới ✨'),
       images: images,
       videoUrl: videoUri || undefined,
       videoDuration: videoUri ? 15 : undefined,
-      hashtags,
+      hashtags: postMode === 'wish' ? [...hashtags, '#NguyenVongViVu', '#TimBanMoi'] : hashtags,
       likes: 0,
       commentsCount: 0,
       sharesCount: 0,
@@ -207,21 +234,32 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
       isRecruitment: postMode === 'recruitment',
       recruitmentSlots: postMode === 'recruitment' ? parseInt(slotsCount) || 4 : undefined,
       recruitmentJoined: 1,
-      activitySnippet: postMode === 'recruitment'
-        ? {
-            location: taggedVenue?.name || selectedCity,
-            time: departureTime,
-            slots: slotsCount,
-            budget: budgetEstimate,
-          }
-        : undefined,
+      isWish: postMode === 'wish',
+      wishDestination: postMode === 'wish' ? wishDestination : undefined,
+      wishDate: postMode === 'wish' ? wishDate : undefined,
+      activitySnippet:
+        postMode === 'recruitment'
+          ? {
+              location: targetLocName,
+              time: departureTime,
+              slots: slotsCount,
+              budget: budgetEstimate,
+            }
+          : postMode === 'wish'
+          ? {
+              location: wishDestination,
+              time: wishDate,
+              slots: '1-3 người',
+              budget: 'Tự do chia sẻ',
+            }
+          : undefined,
     };
 
-    // 1. Optimistic Update on mobile
+    // 1. Optimistic Update immediately in client store
     addPost(newPost);
 
-    // 2. Sync to Backend
-    await ApiClient.createPost(
+    // 2. Synchronize to Backend asynchronously
+    ApiClient.createPost(
       {
         content: newPost.content,
         images: newPost.images,
@@ -236,18 +274,33 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
         isRecruitment: newPost.isRecruitment,
         recruitmentSlots: newPost.recruitmentSlots,
         recruitmentBudget: budgetEstimate,
+        isWish: newPost.isWish,
+        wishDestination: newPost.wishDestination,
+        wishDate: newPost.wishDate,
       },
       token || undefined
-    );
+    ).catch(() => {});
 
-    Alert.alert(
-      'Thành công 🎉',
-      postMode === 'recruitment'
-        ? 'Chuyến đi tuyển cạ của bạn đã được đăng thành công!'
-        : 'Bài viết và khoảnh khắc đã được đăng lên VIVU Feed!',
-      [{ text: 'Xem trên Feed', onPress: () => onNavigate('home_feed') }]
-    );
+    // 3. Immediately exit and navigate to Home Feed (User requested instant exit without blocking alert)
+    onNavigate('home_feed');
   };
+
+  // Filter venues by search
+  const filteredVenues = venuesList.filter((v) => {
+    if (!venueSearch.trim()) return true;
+    const q = venueSearch.toLowerCase();
+    return (
+      v.name?.toLowerCase().includes(q) ||
+      v.address?.toLowerCase().includes(q) ||
+      v.category?.toLowerCase().includes(q)
+    );
+  });
+
+  // Filter friends by search
+  const filteredFriends = friendsList.filter((f) => {
+    if (!friendSearch.trim()) return true;
+    return f.name?.toLowerCase().includes(friendSearch.toLowerCase());
+  });
 
   return (
     <View style={styles.container}>
@@ -259,7 +312,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
       />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Mode Selector Tabs */}
+        {/* Mode Selector Tabs (3 Modes) */}
         <View style={styles.modeTabs}>
           <TouchableOpacity
             style={[styles.modeTab, postMode === 'moment' && styles.modeTabActive]}
@@ -267,7 +320,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
           >
             <Ionicons
               name="sparkles"
-              size={16}
+              size={14}
               color={postMode === 'moment' ? '#FFFFFF' : COLORS.textDark}
             />
             <Text
@@ -276,7 +329,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                 postMode === 'moment' && styles.modeTabTextActive,
               ]}
             >
-              Chia sẻ khoảnh khắc
+              Khoảnh khắc
             </Text>
           </TouchableOpacity>
 
@@ -286,7 +339,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
           >
             <Ionicons
               name="people"
-              size={16}
+              size={14}
               color={postMode === 'recruitment' ? '#FFFFFF' : COLORS.textDark}
             />
             <Text
@@ -295,7 +348,26 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                 postMode === 'recruitment' && styles.modeTabTextActive,
               ]}
             >
-              Tuyển cạ vi vu 🛵
+              Tuyển cạ 🛵
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.modeTab, postMode === 'wish' && styles.modeTabActive]}
+            onPress={() => setPostMode('wish')}
+          >
+            <Ionicons
+              name="navigate"
+              size={14}
+              color={postMode === 'wish' ? '#FFFFFF' : COLORS.textDark}
+            />
+            <Text
+              style={[
+                styles.modeTabText,
+                postMode === 'wish' && styles.modeTabTextActive,
+              ]}
+            >
+              Nguyện vọng 📍
             </Text>
           </TouchableOpacity>
         </View>
@@ -313,17 +385,58 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
             </View>
             <View style={styles.privacyBadge}>
               <Ionicons name="earth" size={11} color={COLORS.primary} />
-              <Text style={styles.privacyText}>Công khai toàn quốc</Text>
+              <Text style={styles.privacyText}>
+                {postMode === 'wish'
+                  ? 'Đồng bộ lên Bản Đồ toàn quốc'
+                  : 'Công khai cho cạ cứng'}
+              </Text>
             </View>
           </View>
         </View>
+
+        {/* Wish Mode Specific Box */}
+        {postMode === 'wish' && (
+          <View style={styles.wishBox}>
+            <View style={styles.wishHeader}>
+              <Ionicons name="flame" size={18} color="#EF4444" />
+              <Text style={styles.wishTitle}>Đăng Nguyện Vọng Đi Đâu Đó (Đồng bộ lên Map)</Text>
+            </View>
+            <Text style={styles.wishDesc}>
+              Nguyện vọng của bạn sẽ được ghim trực tiếp trên Bản Đồ để bạn bè quanh khu vực thấy và ghép cạ cùng bạn!
+            </Text>
+
+            <View style={styles.recruitFieldRow}>
+              <Ionicons name="location" size={16} color={COLORS.primary} />
+              <Text style={styles.recruitFieldLabel}>Nơi muốn đến:</Text>
+              <TextInput
+                style={styles.recruitInput}
+                value={wishDestination}
+                onChangeText={setWishDestination}
+                placeholder="VD: Đèo Hải Vân, Phố cổ Hội An, Đỉnh Bàn Cờ..."
+              />
+            </View>
+
+            <View style={styles.recruitFieldRow}>
+              <Ionicons name="calendar-outline" size={16} color={COLORS.textMedium} />
+              <Text style={styles.recruitFieldLabel}>Thời gian:</Text>
+              <TextInput
+                style={styles.recruitInput}
+                value={wishDate}
+                onChangeText={setWishDate}
+                placeholder="VD: Chiều mai 17h, Cuối tuần này..."
+              />
+            </View>
+          </View>
+        )}
 
         {/* Post text input */}
         <TextInput
           style={styles.textInput}
           placeholder={
-            postMode === 'recruitment'
-              ? 'Mô tả chuyến đi: Cần tuyển bao nhiêu bạn? Lịch trình thế nào? Yêu cầu tính cách ra sao...'
+            postMode === 'wish'
+              ? 'Chia sẻ thêm về nguyện vọng này: Bạn thích đi bằng xe máy hay ô tô? Muốn tìm cạ biết chụp ảnh hay sành ăn...'
+              : postMode === 'recruitment'
+              ? 'Mô tả chuyến đi: Lịch trình thế nào? Yêu cầu tính cách ra sao? Chi phí dự kiến...'
               : 'Bạn muốn chia sẻ điều gì? Hãy chia sẻ khoảnh khắc ảnh/video cùng bạn bè nhé...'
           }
           placeholderTextColor={COLORS.textLight}
@@ -380,13 +493,13 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
           <View style={styles.taggedVenueCard}>
             <View style={styles.taggedVenueLeft}>
               <View style={styles.venuePlatformBadge}>
-                <Text style={styles.platformBadgeText}>{taggedVenue.platformSource || 'ĐỊA ĐIỂM'}</Text>
+                <Text style={styles.platformBadgeText}>{taggedVenue.platformSource || 'VERIFIED'}</Text>
               </View>
               <Text style={styles.taggedVenueName}>{taggedVenue.name}</Text>
               <Text style={styles.taggedVenueAddr} numberOfLines={1}>{taggedVenue.address}</Text>
             </View>
             <TouchableOpacity onPress={() => setTaggedVenue(null)} style={styles.removeTagBtn}>
-              <Ionicons name="close-circle" size={20} color={COLORS.textLight} />
+              <Ionicons name="close-circle" size={22} color={COLORS.textLight} />
             </TouchableOpacity>
           </View>
         )}
@@ -420,35 +533,11 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
             />
             <View style={styles.videoOverlayControls}>
               <TouchableOpacity
-                style={styles.videoControlBtn}
-                onPress={() => setIsVideoPlaying(!isVideoPlaying)}
-              >
-                <Ionicons
-                  name={isVideoPlaying ? 'pause' : 'play'}
-                  size={18}
-                  color="#FFF"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.videoControlBtn}
-                onPress={() => setIsVideoMuted(!isVideoMuted)}
-              >
-                <Ionicons
-                  name={isVideoMuted ? 'volume-mute' : 'volume-high'}
-                  size={18}
-                  color="#FFF"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
                 style={[styles.videoControlBtn, { backgroundColor: 'rgba(239,68,68,0.85)' }]}
                 onPress={() => setVideoUri(null)}
               >
-                <Ionicons name="trash-outline" size={18} color="#FFF" />
+                <Ionicons name="trash-outline" size={16} color="#FFF" />
               </TouchableOpacity>
-            </View>
-            <View style={styles.videoSoundBadge}>
-              <Ionicons name={isVideoMuted ? 'volume-mute' : 'musical-notes'} size={12} color="#FFF" />
-              <Text style={styles.videoSoundText}>{isVideoMuted ? 'Đang tắt tiếng' : 'Có âm thanh'}</Text>
             </View>
           </View>
         )}
@@ -535,7 +624,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Submit Post Button */}
+        {/* Submit Post Button (Instantly posts & exits) */}
         <TouchableOpacity
           style={styles.submitBtn}
           activeOpacity={0.85}
@@ -549,29 +638,50 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
           >
             <Ionicons name="send" size={18} color="#FFF" style={{ marginRight: 8 }} />
             <Text style={styles.btnText}>
-              {postMode === 'recruitment' ? 'Đăng tuyển cạ vi vu' : 'Đăng bài viết'}
+              {postMode === 'wish'
+                ? 'Đăng nguyện vọng & đồng bộ Map'
+                : postMode === 'recruitment'
+                ? 'Đăng tuyển cạ vi vu'
+                : 'Đăng bài viết'}
             </Text>
           </LinearGradient>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Modal: Pick Crawled Spot */}
+      {/* Modal: Pick Crawled Spot with Search */}
       <Modal visible={showVenueModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chọn địa điểm thật (Zero-Garbage)</Text>
+              <Text style={styles.modalTitle}>Gắn địa điểm thật (Zero-Garbage)</Text>
               <TouchableOpacity onPress={() => setShowVenueModal(false)}>
                 <Ionicons name="close" size={24} color={COLORS.textDark} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>Dữ liệu từ Wikidata, ShopeeFood, GrabFood & Traveloka tại {selectedCity}</Text>
+            <Text style={styles.modalSubtitle}>Tìm kiếm địa điểm du lịch, ẩm thực, trường học, khách sạn tại {selectedCity}</Text>
+
+            {/* Search Input for Venues */}
+            <View style={styles.modalSearchBar}>
+              <Ionicons name="search" size={18} color={COLORS.textLight} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Tìm tên quán ăn, cafe, địa danh, trường học..."
+                placeholderTextColor={COLORS.textLight}
+                value={venueSearch}
+                onChangeText={setVenueSearch}
+              />
+              {venueSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setVenueSearch('')}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
+                </TouchableOpacity>
+              )}
+            </View>
 
             {loadingVenues ? (
               <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 30 }} />
             ) : (
               <ScrollView style={{ maxHeight: 380 }}>
-                {venuesList.map((item, idx) => (
+                {filteredVenues.map((item, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={styles.venueItem}
@@ -579,8 +689,10 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                       setTaggedVenue({
                         id: item.id || 'v_' + idx,
                         name: item.name,
-                        address: item.address,
-                        platformSource: item.platformSource || 'SHOPEEFOOD',
+                        address: item.address || selectedCity,
+                        platformSource: item.platformSource || 'VERIFIED',
+                        latitude: item.latitude || 16.0544,
+                        longitude: item.longitude || 108.2022,
                       });
                       setShowVenueModal(false);
                     }}
@@ -590,9 +702,9 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                     </View>
                     <View style={{ flex: 1, marginLeft: 8 }}>
                       <Text style={styles.venueItemName}>{item.name}</Text>
-                      <Text style={styles.venueItemAddr} numberOfLines={1}>{item.address}</Text>
+                      <Text style={styles.venueItemAddr} numberOfLines={1}>{item.address || selectedCity}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+                    <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.primary} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -601,7 +713,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
         </View>
       </Modal>
 
-      {/* Modal: Tag Friends */}
+      {/* Modal: Tag Friends with Search */}
       <Modal visible={showFriendModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -611,13 +723,23 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                 <Ionicons name="close" size={24} color={COLORS.textDark} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>Chọn bạn bè trong danh sách cạ cứng của bạn</Text>
+
+            <View style={styles.modalSearchBar}>
+              <Ionicons name="search" size={18} color={COLORS.textLight} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Tìm bạn theo tên..."
+                placeholderTextColor={COLORS.textLight}
+                value={friendSearch}
+                onChangeText={setFriendSearch}
+              />
+            </View>
 
             {loadingFriends ? (
               <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 30 }} />
             ) : (
               <ScrollView style={{ maxHeight: 380 }}>
-                {friendsList.map((f, idx) => {
+                {filteredFriends.map((f, idx) => {
                   const isTagged = taggedFriends.some((x) => x.id === f.id);
                   return (
                     <TouchableOpacity
@@ -651,7 +773,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
               style={styles.modalDoneBtn}
               onPress={() => setShowFriendModal(false)}
             >
-              <Text style={styles.modalDoneText}>Hoàn tất</Text>
+              <Text style={styles.modalDoneText}>Hoàn tất ({taggedFriends.length} người)</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -684,7 +806,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     paddingVertical: 10,
     borderRadius: 10,
   },
@@ -693,7 +815,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.glow,
   },
   modeTabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.textDark,
   },
@@ -748,12 +870,37 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   textInput: {
-    fontSize: 16,
+    fontSize: 15,
     color: COLORS.textDark,
     minHeight: 80,
     textAlignVertical: 'top',
     lineHeight: 22,
     marginBottom: 12,
+  },
+  wishBox: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    padding: 14,
+    marginBottom: 14,
+    gap: 8,
+  },
+  wishHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  wishTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  wishDesc: {
+    fontSize: 11,
+    color: COLORS.textMedium,
+    lineHeight: 16,
+    marginBottom: 4,
   },
   recruitmentBox: {
     backgroundColor: '#F8FAFC',
@@ -795,7 +942,7 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
   taggedVenueCard: {
     flexDirection: 'row',
@@ -868,7 +1015,7 @@ const styles = StyleSheet.create({
   },
   videoPreviewWrap: {
     position: 'relative',
-    height: 220,
+    height: 200,
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#000',
@@ -880,35 +1027,18 @@ const styles = StyleSheet.create({
   },
   videoOverlayControls: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 8,
+    right: 8,
     flexDirection: 'row',
     gap: 8,
+    zIndex: 10,
   },
   videoControlBtn: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  videoSoundBadge: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  videoSoundText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '600',
   },
   imagePreviewGrid: {
     flexDirection: 'row',
@@ -918,8 +1048,8 @@ const styles = StyleSheet.create({
   },
   previewBox: {
     position: 'relative',
-    width: 90,
-    height: 90,
+    width: 85,
+    height: 85,
     borderRadius: 10,
     overflow: 'hidden',
   },
@@ -986,7 +1116,7 @@ const styles = StyleSheet.create({
   },
   optionsGrid: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginBottom: 20,
   },
   optionBtn: {
@@ -994,17 +1124,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },
   optIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   optLabel: {
     fontSize: 11,
@@ -1037,7 +1167,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '75%',
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1053,7 +1183,22 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: 12,
     color: COLORS.textMedium,
-    marginBottom: 14,
+    marginBottom: 12,
+  },
+  modalSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    marginBottom: 12,
+    gap: 8,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.textDark,
   },
   venueItem: {
     flexDirection: 'row',
@@ -1063,12 +1208,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   venueItemName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.textDark,
   },
   venueItemAddr: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textMedium,
     marginTop: 2,
   },

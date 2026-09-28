@@ -15,6 +15,7 @@ interface FeedState {
   fetchPosts: (category?: string) => Promise<void>;
   toggleLike: (postId: string) => void;
   addPost: (newPost: PostItem) => void;
+  deletePost: (postId: string) => void;
   addComment: (postId: string) => void;
 }
 
@@ -76,6 +77,11 @@ export const useFeedStore = create<FeedState>((set, get) => ({
   addPost: (newPost) =>
     set((state) => ({
       posts: [newPost, ...state.posts],
+    })),
+
+  deletePost: (postId) =>
+    set((state) => ({
+      posts: state.posts.filter((p) => p.id !== postId),
     })),
 
   addComment: (postId) =>

@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Header } from '../../components/Header';
@@ -22,6 +21,7 @@ import { ApiClient } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
+import { Audio } from '../../utils/safeAV';
 
 interface PersonalChatProps {
   onNavigate: (screen: ScreenKey) => void;
@@ -52,11 +52,11 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
   const [selectedMsgForReaction, setSelectedMsgForReaction] = useState<string | null>(null);
 
   // Voice recording & playback states
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recording, setRecording] = useState<any | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<any | null>(null);
   const recordTimerRef = useRef<any>(null);
 
   const [smartReplies, setSmartReplies] = useState<string[]>([
@@ -274,7 +274,7 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
       soundRef.current = sound;
       setPlayingAudioId(msgId);
 
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate((status: any) => {
         if (status.isLoaded && status.didJustFinish) {
           setPlayingAudioId(null);
         }

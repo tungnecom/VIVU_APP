@@ -10,13 +10,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { ViViMascotModal } from '../../components/ViViMascotModal';
 import { CURRENT_USER, MOCK_ACTIVITY, MOCK_POSTS } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
 import { ScreenKey } from '../../types';
+import { Video, ResizeMode } from '../../utils/safeAV';
 
 interface HomeFeedProps {
   onNavigate: (screen: ScreenKey) => void;
@@ -36,6 +36,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   const likedPostIds = useFeedStore((state) => state.likedPostIds) || {};
   const likedPosts = useFeedStore((state) => state.likedPosts) || likedPostIds;
   const toggleLike = useFeedStore((state) => state.toggleLike);
+  const deletePost = useFeedStore((state) => state.deletePost);
   const activeCategory = useFeedStore((state) => state.activeCategory);
   const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
   const fetchPosts = useFeedStore((state) => state.fetchPosts);
@@ -45,6 +46,38 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
       ...prev,
       [postId]: prev[postId] === undefined ? true : !prev[postId],
     }));
+  };
+
+  const handlePostOptions = (post: any) => {
+    Alert.alert(
+      'Tùy chọn bài viết',
+      'Chọn thao tác bạn muốn thực hiện:',
+      [
+        { text: 'Chỉnh sửa bài viết', onPress: () => onNavigate('edit_post') },
+        {
+          text: 'Xóa bài viết',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Xác nhận xóa',
+              'Bạn có chắc chắn muốn xóa bài viết này khỏi VIVU Feed không?',
+              [
+                { text: 'Hủy', style: 'cancel' },
+                {
+                  text: 'Xóa ngay',
+                  style: 'destructive',
+                  onPress: () => {
+                    deletePost(post.id);
+                    Alert.alert('Đã xóa', 'Bài viết đã được xóa thành công khỏi Feed!');
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: 'Đóng', style: 'cancel' },
+      ]
+    );
   };
 
   useEffect(() => {
@@ -275,7 +308,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => onNavigate('edit_post')}>
+                <TouchableOpacity onPress={() => handlePostOptions(post)}>
                   <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.textLight} />
                 </TouchableOpacity>
               </View>
