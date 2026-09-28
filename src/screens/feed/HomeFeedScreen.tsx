@@ -37,6 +37,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   const likedPosts = useFeedStore((state) => state.likedPosts) || likedPostIds;
   const toggleLike = useFeedStore((state) => state.toggleLike);
   const deletePost = useFeedStore((state) => state.deletePost);
+  const setSelectedPostId = useFeedStore((state) => state.setSelectedPostId);
   const activeCategory = useFeedStore((state) => state.activeCategory);
   const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
   const fetchPosts = useFeedStore((state) => state.fetchPosts);
@@ -328,7 +329,10 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
 
               {/* Post Content */}
               <TouchableOpacity
-                onPress={() => onNavigate('post_detail')}
+                onPress={() => {
+                  setSelectedPostId(post.id);
+                  onNavigate('post_detail');
+                }}
                 activeOpacity={0.8}
               >
                 <Text style={styles.postContentText}>{post.content}</Text>
@@ -493,7 +497,10 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
 
                 <TouchableOpacity
                   style={styles.actionItem}
-                  onPress={() => onNavigate('comment')}
+                  onPress={() => {
+                    setSelectedPostId(post.id);
+                    onNavigate('post_detail');
+                  }}
                 >
                   <Ionicons name="chatbubble-outline" size={19} color={COLORS.textMedium} />
                   <Text style={styles.actionNum}>{post.commentsCount}</Text>

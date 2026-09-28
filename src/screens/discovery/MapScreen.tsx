@@ -617,7 +617,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
         </ScrollView>
       </View>
 
-      {/* FLOATING MAP CONTROLS (Layer Switcher, GPS, Compass) */}
+      {/* FLOATING MAP CONTROLS (Layer Switcher, Compass, GPS, Zoom Controls) */}
       <View style={styles.floatingControlsRight}>
         {/* Layer Switcher (Standard / Satellite) */}
         <TouchableOpacity
@@ -629,6 +629,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
             size={20}
             color="#1F2937"
           />
+        </TouchableOpacity>
+
+        {/* Compass */}
+        <TouchableOpacity
+          style={[styles.floatingSquareBtn, { marginTop: 10 }]}
+          onPress={() => {
+            Alert.alert('La bàn', 'Hướng Bắc chuẩn 0° theo la bàn Google Maps');
+          }}
+        >
+          <Ionicons name="compass" size={20} color="#EA4335" />
         </TouchableOpacity>
 
         {/* My Location GPS Beacon */}
@@ -643,14 +653,37 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
         >
           <Ionicons name="locate" size={20} color="#2563EB" />
         </TouchableOpacity>
+
+        {/* Google Maps Zoom Controls */}
+        <View style={styles.zoomStack}>
+          <TouchableOpacity
+            style={styles.zoomBtn}
+            onPress={() => Alert.alert('Phóng to', 'Đã phóng to tỉ lệ bản đồ 2x')}
+          >
+            <Ionicons name="add" size={18} color="#374151" />
+          </TouchableOpacity>
+          <View style={styles.zoomDivider} />
+          <TouchableOpacity
+            style={styles.zoomBtn}
+            onPress={() => Alert.alert('Thu nhỏ', 'Đã thu nhỏ tỉ lệ bản đồ 0.5x')}
+          >
+            <Ionicons name="remove" size={18} color="#374151" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* GOOGLE MAPS 1:1 INTERACTIVE BOTTOM SHEET (SELECTED PLACE) */}
       {selectedPlace && !selectedWish && (
         <View style={styles.googleBottomSheet}>
-          {/* Sheet Handle */}
-          <View style={styles.sheetHandleWrap}>
+          {/* Sheet Handle & Close Button */}
+          <View style={styles.sheetHandleRow}>
             <View style={styles.sheetHandle} />
+            <TouchableOpacity
+              style={styles.sheetCloseBtn}
+              onPress={() => setSelectedPlace(null)}
+            >
+              <Ionicons name="close-circle" size={22} color="#9CA3AF" />
+            </TouchableOpacity>
           </View>
 
           {/* Place Header Info */}
@@ -1235,6 +1268,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.08)',
   },
+  zoomStack: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+    ...SHADOWS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  zoomBtn: {
+    width: 44,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 6,
+  },
   googleBottomSheet: {
     position: 'absolute',
     bottom: 0,
@@ -1249,9 +1302,18 @@ const styles = StyleSheet.create({
     ...SHADOWS.md,
     zIndex: 40,
   },
-  sheetHandleWrap: {
+  sheetHandleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 8,
+    position: 'relative',
+  },
+  sheetCloseBtn: {
+    position: 'absolute',
+    right: 0,
+    top: 6,
+    padding: 4,
   },
   sheetHandle: {
     width: 36,

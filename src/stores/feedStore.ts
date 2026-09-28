@@ -5,12 +5,14 @@ import { PostItem } from '../types';
 
 interface FeedState {
   posts: PostItem[];
+  selectedPostId: string | null;
   likedPostIds: Record<string, boolean>;
   likedPosts: Record<string, boolean>;
   activeCategory: string;
   loading: boolean;
 
   // Actions
+  setSelectedPostId: (postId: string | null) => void;
   setActiveCategory: (category: string) => void;
   fetchPosts: (category?: string) => Promise<void>;
   toggleLike: (postId: string) => void;
@@ -23,10 +25,13 @@ const initialLiked = { p2: true };
 
 export const useFeedStore = create<FeedState>((set, get) => ({
   posts: MOCK_POSTS,
+  selectedPostId: null,
   likedPostIds: initialLiked,
   likedPosts: initialLiked,
   activeCategory: 'Ăn uống',
   loading: false,
+
+  setSelectedPostId: (postId) => set({ selectedPostId: postId }),
 
   setActiveCategory: (category) => {
     set({ activeCategory: category });

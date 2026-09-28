@@ -22,6 +22,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useFeedStore } from '../../stores/feedStore';
 import { PostItem, ScreenKey } from '../../types';
 import { Video, ResizeMode } from '../../utils/safeAV';
+import { MASTER_NATIONWIDE_PLACES } from '../../services/fullVietnamData';
 
 interface CreatePostProps {
   onNavigate: (screen: ScreenKey) => void;
@@ -100,21 +101,12 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
     try {
       const res = await ApiClient.getPlaces(selectedCity);
       if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        setVenuesList(res.data);
+        setVenuesList([...res.data, ...MASTER_NATIONWIDE_PLACES]);
       } else {
-        // Full nationwide fallback venues
-        setVenuesList([
-          { id: 'v1', name: 'Sơn Trà Marina Lounge', address: 'Đường Hồ Xanh, Sơn Trà', platformSource: 'SHOPEEFOOD', category: 'Cafe', latitude: 16.1158, longitude: 108.2536 },
-          { id: 'v2', name: 'Bánh Tráng Thịt Heo Đại Lộc', address: '97 Trưng Nữ Vương, Hải Châu', platformSource: 'GRABFOOD', category: 'Ăn uống', latitude: 16.0633, longitude: 108.2178 },
-          { id: 'v3', name: 'Đỉnh Bàn Cờ Bán Đảo Sơn Trà', address: 'Bán đảo Sơn Trà, Đà Nẵng', platformSource: 'WIKIMEDIA', category: 'Du lịch', latitude: 16.1215, longitude: 108.2750 },
-          { id: 'v4', name: 'Quán Nối Cafe Hoài Cổ', address: '113/18 Nguyễn Chí Thanh', platformSource: 'TRAVELOKA', category: 'Cafe', latitude: 16.0712, longitude: 108.2231 },
-          { id: 'v5', name: 'Đại Học Bách Khoa Đà Nẵng', address: '54 Nguyễn Lương Bằng, Liên Chiểu', platformSource: 'WIKIMEDIA', category: 'Trường học', latitude: 16.0754, longitude: 108.1534 },
-          { id: 'v6', name: 'Khách sạn Novotel Danang Premier', address: '36 Bạch Đằng, Hải Châu', platformSource: 'TRAVELOKA', category: 'Nghỉ ngơi', latitude: 16.0772, longitude: 108.2241 },
-          { id: 'v7', name: 'Chợ Đêm Helio & Phố Ẩm Thực', address: 'Đường 2 Tháng 9, Hòa Cường Nam', platformSource: 'SHOPEEFOOD', category: 'Vui chơi', latitude: 16.0352, longitude: 108.2238 },
-        ]);
+        setVenuesList(MASTER_NATIONWIDE_PLACES);
       }
     } catch {
-      // ignore
+      setVenuesList(MASTER_NATIONWIDE_PLACES);
     } finally {
       setLoadingVenues(false);
     }
@@ -677,6 +669,32 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
               )}
             </View>
 
+            {/* Quick Add Custom Place when user types */}
+            {venueSearch.trim().length > 0 && (
+              <TouchableOpacity
+                style={styles.customAddButton}
+                onPress={() => {
+                  setTaggedVenue({
+                    id: 'custom_venue_' + Date.now(),
+                    name: venueSearch.trim(),
+                    address: selectedCity,
+                    platformSource: 'ĐỊA ĐIỂM TỰ CHỌN',
+                    latitude: 16.0544,
+                    longitude: 108.2022,
+                  });
+                  setVenueSearch('');
+                  setShowVenueModal(false);
+                }}
+              >
+                <Ionicons name="add-circle" size={20} color="#10B981" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.customAddTitle}>Gắn địa điểm này:</Text>
+                  <Text style={styles.customAddVal} numberOfLines={1}>"{venueSearch.trim()}"</Text>
+                </View>
+                <Text style={styles.customAddAction}>Chọn ➔</Text>
+              </TouchableOpacity>
+            )}
+
             {loadingVenues ? (
               <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 30 }} />
             ) : (
@@ -690,7 +708,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                         id: item.id || 'v_' + idx,
                         name: item.name,
                         address: item.address || selectedCity,
-                        platformSource: item.platformSource || 'VERIFIED',
+                        platformSource: item.platformSource || (item as any).source || 'VERIFIED',
                         latitude: item.latitude || 16.0544,
                         longitude: item.longitude || 108.2022,
                       });
@@ -698,7 +716,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                     }}
                   >
                     <View style={styles.venuePlatformBadge}>
-                      <Text style={styles.platformBadgeText}>{item.platformSource || 'VERIFIED'}</Text>
+                      <Text style={styles.platformBadgeText}>{item.platformSource || (item as any).source || 'VERIFIED'}</Text>
                     </View>
                     <View style={{ flex: 1, marginLeft: 8 }}>
                       <Text style={styles.venueItemName}>{item.name}</Text>
@@ -733,7 +751,38 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                 value={friendSearch}
                 onChangeText={setFriendSearch}
               />
+              {friendSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setFriendSearch('')}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
+                </TouchableOpacity>
+              )}
             </View>
+
+            {/* Quick Add Custom Friend when user types */}
+            {friendSearch.trim().length > 0 && (
+              <TouchableOpacity
+                style={[styles.customAddButton, { borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }]}
+                onPress={() => {
+                  const cleanName = friendSearch.trim().replace(/^@/, '');
+                  setTaggedFriends([
+                    ...taggedFriends,
+                    {
+                      id: 'custom_f_' + Date.now(),
+                      name: cleanName,
+                      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+                    },
+                  ]);
+                  setFriendSearch('');
+                }}
+              >
+                <Ionicons name="person-add" size={18} color="#7C3AED" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.customAddTitle, { color: '#7C3AED' }]}>Gắn thẻ cạ mới:</Text>
+                  <Text style={styles.customAddVal} numberOfLines={1}>"@{friendSearch.trim().replace(/^@/, '')}"</Text>
+                </View>
+                <Text style={[styles.customAddAction, { color: '#7C3AED' }]}>Thêm ➔</Text>
+              </TouchableOpacity>
+            )}
 
             {loadingFriends ? (
               <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 30 }} />
@@ -1250,5 +1299,30 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  customAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  customAddTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  customAddVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1F2937',
+  },
+  customAddAction: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
   },
 });
