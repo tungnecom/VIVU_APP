@@ -10,9 +10,11 @@
 3. [KIẾN TRÚC CHỊU TẢI 10.000 CCU & CƠ SỞ DỮ LIỆU](#3-kiến-trúc-chịu-tải-10000-ccu--cơ-sở-dữ-liệu)
 4. [HỆ THỐNG THUẬT TOÁN AI CỐT LÕI](#4-hệ-thống-thuật-toán-ai-cốt-lõi)
 5. [HỆ THỐNG CÀO DỮ LIỆU & LÀM SẠCH ĐỊA ĐIỂM (ZERO-GARBAGE DATA ENGINE)](#5-hệ-thống-cào-dữ-liệu--làm-sạch-địa-điểm-zero-garbage-data-engine)
-6. [PHÂN RÃ CÔNG VIỆC CHI TIẾT (WBS) & TIẾN ĐỘ 8 TUẦN](#6-phân-rã-công-việc-chi-tiết-wbs--tiến-độ-8-tuần)
+6. [PHÂN RÃ CÔNG VIỆC CHI TIẾT (WBS) & TIẾN ĐỘ 8 TUẦN ĐẦU](#6-phân-rã-công-việc-chi-tiết-wbs--tiến-độ-8-tuần-đầu)
 7. [MA TRẬN QUẢN TRỊ RỦI RO & BẢO MẬT](#7-ma-trận-quản-trị-rủi-ro--bảo-mật)
 8. [BỘ CHỈ SỐ ĐO LƯỜNG HIỆU QUẢ (KPIS) & NGHIỆM THU](#8-bộ-chỉ-số-đo-lường-hiệu-quả-kpis--nghiệm-thu)
+9. [GIAI ĐOẠN 2: HOÀN THIỆN HẠ TẦNG PRODUCTION (PHASE 2 HARDENING)](#9-giai-đoạn-2-hoàn-thiện-hạ-tầng-production-phase-2-hardening)
+10. [GIAI ĐOẠN 3: LỘ TRÌNH 100% PRODUCTION DATA & TÍNH NĂNG THỰC TẾ (PHASE 3 ROADMAP)](#10-giai-đoạn-3-lộ-trình-100-production-data--tính-năng-thực-tế-phase-3-roadmap)
 
 ---
 
@@ -260,7 +262,7 @@ gantt
 
 ---
 
-## 6. MA TRẬN QUẢN TRỊ RỦI RO & BẢO MẬT
+## 7. MA TRẬN QUẢN TRỊ RỦI RO & BẢO MẬT
 
 | Rủi ro tiềm ẩn | Mức độ | Hậu quả | Giải pháp kỹ thuật phòng ngừa |
 | :--- | :---: | :--- | :--- |
@@ -272,15 +274,15 @@ gantt
 
 ---
 
-## 7. BỘ CHỈ SỐ ĐO LƯỜNG HIỆU QUẢ (KPIS) & NGHIỆM THU
+## 8. BỘ CHỈ SỐ ĐO LƯỜNG HIỆU QUẢ (KPIS) & NGHIỆM THU
 
-### 7.1. Chỉ số Kỹ thuật (Technical Metrics)
+### 8.1. Chỉ số Kỹ thuật (Technical Metrics)
 - **API Response Time (P95)**: $< 100\text{ms}$ đối với các truy vấn đọc, $< 250\text{ms}$ đối với các truy vấn ghi/AI.
 - **App Launch Time (Cold start)**: $< 1.8\text{s}$ trên thiết bị tầm trung.
 - **Crash-free Sessions Rate**: $\ge 99.5\%$.
 - **Database CPU Utilization**: Không vượt quá $65\%$ khi chịu tải 10.000 CCU.
 
-### 7.2. Chỉ số Nghiệm thu Vận hành Sản phẩm (Product Metrics)
+### 8.2. Chỉ số Nghiệm thu Vận hành Sản phẩm (Product Metrics)
 - **Tỷ lệ hoàn thành Onboarding**: $\ge 85\%$ người cài đặt hoàn thành trọn vẹn luồng 10 màn hình đầu tiên.
 - **Match Conversion Rate**: $\ge 35\%$ người dùng tìm được ít nhất 1 bạn đồng hành phù hợp trong tuần đầu tiên.
 - **Tỷ lệ tham gia đúng hẹn (Punctuality Rate)**: $\ge 92\%$ các chuyến đi được check-in thành công.
@@ -288,11 +290,7 @@ gantt
 
 ---
 
-*Kế hoạch dự án này được lưu trữ chính thức tại kho mã nguồn của dự án VIVU.*
-
----
-
-## 🚀 8. GIAI ĐOẠN NÂNG CAO (PHASE 2 - ADVANCED PRODUCTION HARDENING)
+## 🚀 9. GIAI ĐOẠN 2: HOÀN THIỆN HẠ TẦNG PRODUCTION (PHASE 2 HARDENING)
 
 | Nhiệm vụ | Mô tả & Công nghệ | Trạng thái |
 | :--- | :--- | :---: |
@@ -300,4 +298,350 @@ gantt
 | **2. Tự động hóa Check-in GPS Geofencing** | Tích hợp xác thực bán kính (< 100m) tại [ActivityDetailScreen.tsx](file:///d:/vivudemo1/src/screens/match/ActivityDetailScreen.tsx) và cộng tự động **+30 Điểm Uy Tín** chống bùng hẹn. | ✅ Đã hoàn thành |
 | **3. Đóng gói Container Production** | Xây dựng [Dockerfile](file:///d:/vivudemo1/backend/Dockerfile) multi-stage và [docker-compose.yml](file:///d:/vivudemo1/docker-compose.yml) điều phối PostgreSQL 16 pgvector, PgBouncer 10k connection pool, Redis 7 LRU và Express cluster. | ✅ Đã hoàn thành |
 | **4. Zero-Garbage Automated Cron** | Thiết lập cron định kỳ mỗi 60 phút trong [crawler.service.ts](file:///d:/vivudemo1/backend/src/modules/crawler/crawler.service.ts) tự động rà soát quán đóng cửa, làm mới rating và làm sạch rác ảo. | ✅ Đã hoàn thành |
+
+---
+
+## 🌟 10. GIAI ĐOẠN 3: LỘ TRÌNH 100% PRODUCTION DATA & TÍNH NĂNG THỰC TẾ (PHASE 3 ROADMAP)
+
+### 10.1. Tuyên Ngôn "Zero-Mock" & Nguyên Tắc An Toàn Mã Nguồn Tuyệt Đối
+
+> [!IMPORTANT]
+> **Cam Kết Chất Lượng Dữ Liệu**: Loại bỏ hoàn toàn 100% dữ liệu giả lập (mock data), mảng tự tạo (hardcoded arrays) và số liệu giả tưởng trong toàn bộ ứng dụng. Tất cả các màn hình từ Onboarding, Feed, Khám phá Bản đồ, Ghép cạ, Trò chuyện cho đến Hồ sơ cá nhân đều phải vận hành dựa trên cơ sở dữ liệu thực tế, định vị thiết bị thực tế, và dịch vụ bên thứ ba chính thức.
+
+#### 🛡️ Bộ Quy Tắc Bảo Vệ Tệp & Chống Xóa Nhầm (Zero File Deletion Protocol)
+1. **Tuyệt đối không xóa file (Non-destructive Policy)**: Toàn bộ 28 màn hình giao diện hiện có, các components dùng chung, và các module backend đã xây dựng đều là tài sản cốt lõi. Mọi nâng cấp đều tuân thủ nguyên tắc **"Mở rộng tại chỗ & Tương thích ngược"** (In-place Extension & Backward Compatibility).
+2. **Kiểm tra trạng thái Git trước và sau mỗi tác vụ (Git Checkpoint Gate)**:
+   - Trước khi sửa: Xác nhận nhánh làm việc và trạng thái sạch (`git status`).
+   - Sau khi sửa: Kiểm tra kỹ file diff (`git diff --stat`) để chắc chắn không xóa nhầm file hoặc dòng mã quan trọng.
+3. **Cổng kiểm soát kiểu tĩnh (Static Type Safety Gate)**:
+   - Sau mỗi tác vụ, bắt buộc thực hiện lệnh `npx tsc --noEmit` trên cả frontend mobile (`d:/vivudemo1`) và backend (`d:/vivudemo1/backend`) với kết quả **0 Errors**.
+4. **Cổng kiểm chuẩn Expo (Expo Doctor Gate)**:
+   - Chạy `npx expo-doctor` để đảm bảo 100% phụ viện tương thích với Expo SDK 57, không phát sinh xung đột native dependencies.
+
+---
+
+### 10.2. Phân Hệ 1: Cào Dữ Liệu 63 Tỉnh Thành & Ẩm Thực/Giải Trí/Di Tích Toàn Quốc (National Real Crawler Engine)
+
+```mermaid
+flowchart TD
+    subgraph Sources ["1. Nguồn Dữ Liệu Trực Tiếp Thực Tế (Live Scraping Sources)"]
+        WIKI["Wikimedia & Wikidata SPARQL API\n- 63 Tỉnh/Thành phố Việt Nam\n- Tọa độ trung tâm P625, Dân số, Diện tích\n- Ảnh bản quyền CC P18, Tóm tắt Wiki tiếng Việt"]
+        DELIVERY["Nền Tảng Giao Đồ Ăn & Đánh Giá\n(ShopeeFood, GrabFood, Baemin, Capichi, Foody/Riviu)\n- Quán ăn đặc sản, Cafe, Trà sữa, Pub, Ẩm thực đường phố\n- Ảnh món ăn/quán HD, Rating thực tế, Lượt đánh giá, Giờ mở cửa"]
+        TOURISM["Cổng Thông Tin Du Lịch & Di Tích\n(Traveloka, Tổng cục Du lịch, Cổng địa phương)\n- Danh lam thắng cảnh, Di tích lịch sử, Bảo tàng\n- Giá vé, Giờ tham quan, Tiện ích bãi xe, Đánh giá du khách"]
+    end
+
+    subgraph ZeroGarbageEngine ["2. Đường Ống Làm Sạch 5 Tầng (Zero-Garbage Pipeline)"]
+        P1["Tầng 1: Chuẩn hóa Unicode tiếng Việt (NFC), bóc tách số nhà/phường/quận"]
+        P2["Tầng 2: Xác thực GPS trong biên giới Việt Nam & Polygon ranh giới tỉnh"]
+        P3["Tầng 3: Khử trùng lặp (Jaro-Winkler >= 0.88 + Haversine < 50m)"]
+        P4["Tầng 4: AI Trạng thái hoạt động (Lọc quán đã đóng cửa/ngừng kinh doanh)"]
+        P5["Tầng 5: Kiểm tra liên kết ảnh HTTP HEAD 200, nén WebP trên CDN"]
+        
+        WIKI & DELIVERY & TOURISM --> P1 --> P2 --> P3 --> P4 --> P5
+    end
+
+    subgraph ProductionStore ["3. Cơ Sở Dữ Liệu Thực Tế (Postgres + Redis)"]
+        CityTable["Bảng Province / City: 63 Tỉnh Thành Việt Nam"]
+        VenueTable["Bảng Venue / Location: Quán Ăn, Cafe, Di Tích, Giải Trí"]
+        RedisGeo["Redis GEOADD: Chỉ mục tọa độ truy vấn khoảng cách siêu tốc (< 1ms)"]
+        
+        P5 --> CityTable & VenueTable
+        VenueTable --> RedisGeo
+    end
+```
+
+#### Nhiệm vụ Kỹ thuật Chi tiết:
+- **1. Wikimedia / Wikidata SPARQL Scraper**:
+  - Triển khai script truy vấn SPARQL Wikidata trực tiếp lấy đầy đủ **63 tỉnh/thành phố của Việt Nam** (Entity: `Q25221` với `P31` = `Q515` hoặc `Q350616`).
+  - Trích xuất: Tên tiếng Việt chính thức, Tọa độ GPS (`P625`), Dân số (`P1082`), Diện tích (`P2046`), Ảnh minh họa bản quyền Creative Commons (`P18`), Tóm tắt bách khoa Wikipedia tiếng Việt.
+  - Cập nhật màn hình chọn thành phố [CitySelectScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/CitySelectScreen.tsx) hiển thị 100% danh sách 63 tỉnh thành thực tế kèm ảnh và số lượng địa điểm vi vu.
+- **2. Multi-Platform Food Delivery & Entertainment Scraper**:
+  - Thu thập dữ liệu từ các nền tảng: ShopeeFood, GrabFood, Baemin, Capichi, Traveloka, Foody/Riviu.
+  - Trích xuất trường dữ liệu chuẩn cho từng địa điểm:
+    * `name`: Tên quán ăn, quán cafe, điểm di tích chuẩn tiếng Việt.
+    * `category`: Phân loại chuẩn (`FOOD`, `CAFE`, `ENTERTAINMENT`, `HISTORIC`, `NIGHTLIFE`, `NATURE`).
+    * `address`: Địa chỉ chi tiết (Số nhà, Đường, Phường, Quận, Tỉnh/Thành phố).
+    * `latitude` & `longitude`: Tọa độ GPS vĩ độ - kinh độ thực tế.
+    * `images`: Danh sách URL ảnh thực tế chất lượng cao (đã qua kiểm tra HTTP 200).
+    * `rating`: Điểm đánh giá trung bình từ 1.0 - 5.0 sao thực tế.
+    * `reviewCount`: Tổng số lượt đánh giá thực tế của cộng đồng.
+    * `openingHours`: Khung giờ mở cửa hàng ngày (Ví dụ: `07:00 - 22:30`).
+    * `priceRange`: Khoảng giá ước tính (Ví dụ: `35.000đ - 75.000đ`).
+- **3. Làm sạch bằng 5-Stage Zero-Garbage Pipeline**:
+  - Kích hoạt pipeline tại [crawler.service.ts](file:///d:/vivudemo1/backend/src/modules/crawler/crawler.service.ts) để khử 100% quán ảo, quán đã đóng cửa vĩnh viễn, loại bỏ liên kết ảnh chết và gộp các bản ghi trùng lặp thực thể.
+
+---
+
+### 10.3. Phân Hệ 2: Mạng Xã Hội Bạn Bè & Tìm Cạ Đồng Hành (Social Graph & Travel Buddy Matching)
+
+```mermaid
+graph LR
+    subgraph FriendActions ["Hành Động Kết Bạn"]
+        SearchUser["Tìm kiếm bạn bè\n(Tên, Sở thích, Thành phố, Trust Score)"]
+        SendRequest["Gửi lời mời kết bạn\n(Kèm tin nhắn ngỏ lời)"]
+        AcceptRequest["Chấp nhận lời mời\n(Chuyển sang quan hệ BẠN BÈ)"]
+        DeclineRequest["Từ chối / Chặn (Block)"]
+    end
+
+    subgraph FriendFeatures ["Tính Năng Mạng Xã Hội"]
+        FriendsList["Danh sách bạn bè chính thức"]
+        OnlinePresence["Trạng thái Online / Offline thời gian thực (Socket.io)"]
+        MutualFriends["Số lượng bạn chung (Mutual Friends)"]
+        QuickChat["Nút Nhắn tin 1 chạm từ danh sách bạn"]
+    end
+
+    SearchUser --> SendRequest --> AcceptRequest --> FriendsList
+    AcceptRequest --> OnlinePresence & MutualFriends & QuickChat
+    SendRequest --> DeclineRequest
+```
+
+#### Nhiệm vụ Kỹ thuật Chi tiết:
+- **1. CSDL Friendship trong Prisma**:
+  - Mở rộng model `Friendship` trong [backend/prisma/schema.prisma](file:///d:/vivudemo1/backend/prisma/schema.prisma) với các trường: `requesterId`, `addresseeId`, `status` (`PENDING`, `ACCEPTED`, `DECLINED`, `BLOCKED`), `createdAt`, `updatedAt`.
+  - Thiết lập REST API routes trong `backend/src/modules/friends/friends.routes.ts`:
+    * `GET /api/v1/friends`: Lấy danh sách bạn bè chính thức.
+    * `GET /api/v1/friends/requests`: Lấy danh sách lời mời kết bạn đang chờ duyệt.
+    * `POST /api/v1/friends/request/:targetUserId`: Gửi lời mời kết bạn kèm ghi chú.
+    * `PUT /api/v1/friends/respond/:requestId`: Chấp nhận hoặc từ chối lời mời (`action: 'ACCEPT' | 'DECLINE'`).
+    * `DELETE /api/v1/friends/:friendId`: Hủy kết bạn.
+    * `POST /api/v1/friends/block/:targetUserId`: Chặn người dùng quấy rối.
+- **2. Tích hợp Giao diện Di động (Mobile Screens)**:
+  - Nâng cấp [MatchHomeScreen.tsx](file:///d:/vivudemo1/src/screens/match/MatchHomeScreen.tsx) và [MatchListScreen.tsx](file:///d:/vivudemo1/src/screens/match/MatchListScreen.tsx):
+    * Thanh tìm kiếm bạn bè thông minh theo tên, thành phố, sở thích chung (Cắm trại, Cafe, Phượt, Check-in ẩm thực...).
+    * Thẻ hiển thị bạn bè với Điểm Uy Tín (Trust Score), số bạn chung (Mutual Friends), và nhãn trạng thái Online (chấm xanh) / Offline (thời gian hoạt động gần nhất).
+    * Tab thông báo lời mời kết bạn kèm nút "Đồng ý" (nút xanh nổi bật) và "Bỏ qua".
+    * Nút bấm nhắn tin nhanh chuyển ngay sang phòng chat cá nhân.
+
+---
+
+### 10.4. Phân Hệ 3: Nâng Cấp Tin Nhắn Đa Phương Tiện & Thoại Thực Tế (Rich Real-Time Chat & Voice Messaging)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Alice as Người Dùng (Alice)
+    participant App as VIVU Mobile App
+    participant Socket as Socket.io Server
+    participant Storage as Media Cloud S3 / Cloudinary
+    actor Bob as Bạn Đồng Hành (Bob)
+
+    Note over Alice, Bob: 1. GỬI TIN NHẮN THOẠI (REAL VOICE AUDIO)
+    Alice->>App: Nhấn giữ nút Mic & Thu âm giọng nói
+    App->>App: Ghi âm AAC qua expo-av, hiển thị sóng âm động
+    Alice->>App: Thả nút Mic để gửi
+    App->>Storage: Tải tệp âm thanh .m4a lên CDN
+    Storage-->>App: Trả về URL tệp âm thanh
+    App->>Socket: Gửi event 'send_message' (type: 'AUDIO', duration: 12s, audioUrl)
+    Socket->>Bob: Phân phối tin nhắn thoại tức thì (< 50ms)
+    Bob->>App: Nhấn Play nghe âm thanh thật kèm thanh trượt Seekbar
+
+    Note over Alice, Bob: 2. TƯƠNG TÁC PHẢN HỒI (REACTION, REPLY & UNREAD RECEIPT)
+    Bob->>App: Nhấn đúp thả cảm xúc ❤️ trên tin nhắn
+    App->>Socket: Gửi event 'message_reaction' (messageId, emoji: '❤️')
+    Socket->>Alice: Cập nhật icon cảm xúc thời gian thực
+    Bob->>App: Soạn tin nhắn trả lời trích dẫn (Quote message)
+    App->>Socket: Gửi event 'typing' -> Alice thấy "Bob đang soạn tin..."
+    Socket->>Alice: Gửi event 'message_read' -> Cập nhật 2 tick xanh
+```
+
+#### Nhiệm vụ Kỹ thuật Chi tiết:
+- **1. Tin nhắn Thoại Thực Tế (Voice Audio Recording & Playback)**:
+  - Cài đặt và tích hợp `expo-av` cấu hình chuẩn `Audio.RecordingOptionsPresets.HIGH_QUALITY` (định dạng AAC/M4A nén tối ưu, băng thông nhẹ).
+  - Thiết kế giao diện nút Micro thu âm tương tác mượt mà: Nhấn giữ để ghi âm, vuốt sang trái để hủy, hiển thị biên độ sóng âm dao động theo âm lượng giọng nói thực tế.
+  - Xây dựng component nghe âm thanh `VoiceMessageBubble`: Nút Play/Pause, thanh trượt thời gian (Seek Bar), thời lượng hiển thị (ví dụ: `0:15`).
+- **2. Chia sẻ Đa Phương Tiện & Ghim Vị Trí (Rich Media & Location Pin)**:
+  - Gửi album ảnh chất lượng cao và video ngắn kèm âm thanh.
+  - Gửi ghim vị trí GPS thời gian thực (Location Sharing): Nhấn vào mở ngay bản đồ chỉ đường đến điểm hẹn.
+- **3. Tương tác Nâng cao**:
+  - Emoji Reactions: Hộp thoại chọn cảm xúc nhanh (❤️, 😂, 😮, 😢, 👍) hiển thị trực tiếp góc bong bóng tin nhắn.
+  - Reply / Quote: Trả lời trích dẫn hiển thị tin nhắn gốc phía trên khung nhập liệu.
+  - Thu hồi tin nhắn (Unsend message): Hỗ trợ thu hồi trong 24 giờ cho cả hai bên.
+  - Trạng thái phân phối tin nhắn: 1 tick (Đã gửi lên server), 2 tick xám (Đã nhận về máy người nhận), 2 tick xanh (Đã mở đọc).
+  - Chỉ báo thời gian thực: "Đang nhập tin nhắn..." và "Đang thu âm giọng nói..." qua Socket.io.
+  - Nâng cấp trực tiếp tại [PersonalChatScreen.tsx](file:///d:/vivudemo1/src/screens/chat/PersonalChatScreen.tsx) và [GroupChatScreen.tsx](file:///d:/vivudemo1/src/screens/chat/GroupChatScreen.tsx).
+
+---
+
+### 10.5. Phân Hệ 4: Xác Thực Thực Tế (Real Authentication with Google, Apple & SMS OTP Gateway)
+
+```mermaid
+graph TB
+    subgraph ClientAuth ["1. Khách Hàng (Mobile App)"]
+        GoogleBtn["Nút Đăng nhập Google Thật\n(expo-auth-session / Google Sign-In)"]
+        AppleBtn["Nút Đăng nhập Apple Thật\n(expo-apple-authentication)"]
+        PhoneInput["Nhập Số Điện Thoại Thật (+84...)\n(Đếm ngược 60s, Gửi mã SMS về máy)"]
+    end
+
+    subgraph GatewayAuth ["2. Cổng Xác Thực & SMS Gateway"]
+        GoogleAPI["Google OAuth 2.0 Token Verification"]
+        AppleAPI["Apple Public Key JWT Signature Verification"]
+        SMSProvider["SMS Gateway Dịch Vụ Thật\n(Twilio API / Zalo ZNS / Vietguys)\n-> Bắn tin nhắn SMS chứa mã OTP 6 số về SIM điện thoại"]
+    end
+
+    subgraph BackendAuth ["3. Máy Chủ VIVU Backend"]
+        AuthService["Auth Service (backend/src/modules/auth/auth.service.ts)"]
+        RateLimit["Rate Limiting (Tối đa 3 lần OTP / 10 phút chống Spam)"]
+        JWTGen["Cấp JWT Access Token (15m) & Refresh Token (30d)"]
+        TrustReward["Tự động cộng +20 Điểm Uy Tín (Xác minh SĐT)"]
+    end
+
+    GoogleBtn --> GoogleAPI --> AuthService
+    AppleBtn --> AppleAPI --> AuthService
+    PhoneInput --> RateLimit --> SMSProvider --> PhoneInput
+    PhoneInput -. Nhập OTP 6 số .-> AuthService
+    AuthService --> JWTGen & TrustReward
+```
+
+#### Nhiệm vụ Kỹ thuật Chi tiết:
+- **1. Google Sign-In Thật**:
+  - Tích hợp OAuth 2.0 Web Client ID, Android Client ID và iOS Client ID.
+  - Lấy `idToken` từ Google, gửi lên backend để xác thực với Google Auth Library, tự động lấy Email, Họ tên thật, Ảnh đại diện Google thật.
+- **2. Apple Sign-In Thật**:
+  - Tích hợp `expo-apple-authentication` theo đúng chuẩn Apple Human Interface Guidelines trên thiết bị iOS.
+  - Xác thực chữ ký mã hóa của `identityToken` trên máy chủ backend.
+- **3. SMS Gateway Gửi Mã OTP Về Máy Thật**:
+  - Tích hợp dịch vụ SMS Gateway thực tế (Twilio / Zalo ZNS / Vietguys).
+  - Tạo mã OTP ngẫu nhiên 6 chữ số với thời hạn 5 phút, lưu hash trong Redis cache.
+  - Gửi tin nhắn SMS thật về SIM điện thoại người dùng (+84...).
+  - Thiết lập bộ đếm ngược 60 giây tại [OtpVerificationScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/OtpVerificationScreen.tsx) (Resend OTP Countdown).
+  - Cơ chế bảo vệ Rate Limiting: Tối đa 3 lần yêu cầu OTP trong vòng 10 phút cho mỗi số điện thoại/IP.
+  - Khi xác thực OTP thành công: Tự động đánh dấu tài khoản đã xác minh (`isPhoneVerified: true`), cộng ngay **+20 Điểm Uy Tín** vào tài khoản.
+
+---
+
+### 10.6. Phân Hệ 5: Tạo Bài Viết Đa Phương Tiện (Ảnh HD & Video Có Âm Thanh)
+
+```mermaid
+flowchart LR
+    Picker["Thư Viện Phương Tiện\n(expo-image-picker: Photos & Videos)"]
+    
+    subgraph VideoPipeline ["Xử Lý Video Có Âm Thanh"]
+        VideoCompress["Kiểm tra định dạng AAC/H.264 (Thời lượng <= 60s)"]
+        ThumbnailGen["Tự động sinh ảnh thu nhỏ (Video Thumbnail)"]
+        VideoPreview["Trình phát video xem trước (Nút Bật/Tắt âm thanh)"]
+    end
+
+    subgraph TaggingPipeline ["Gắn Thẻ Thực Tế"]
+        TagSpot["Gắn thẻ Địa điểm từ kho cào\n(Quán ăn, Cafe, Di tích, Điểm giải trí)"]
+        TagFriends["Gắn thẻ Bạn bè đồng hành"]
+        RecruitMode["Chế độ Tuyển cạ vi vu\n(Điểm hẹn, Giờ đi, Chi phí dự kiến)"]
+    end
+
+    Publish["Tải lên CDN S3 & Lưu Bài Viết Thực Tế vào Cơ Sở Dữ Liệu"]
+
+    Picker --> VideoPipeline & TaggingPipeline --> Publish
+```
+
+#### Nhiệm vụ Kỹ thuật Chi tiết:
+- **1. Đăng bài Video có âm thanh đầy đủ**:
+  - Nâng cấp [CreatePostScreen.tsx](file:///d:/vivudemo1/src/screens/feed/CreatePostScreen.tsx) hỗ trợ chọn cả Ảnh HD và Video từ thiết bị (`mediaTypes: ['images', 'videos']`).
+  - Hỗ trợ xem trước Video kèm âm thanh: Tích hợp trình phát video (`expo-video` hoặc `expo-av`) với nút Bật/Tắt tiếng (Mute/Unmute), thanh hiển thị thời lượng (tối đa 60 giây).
+  - Tự động tạo ảnh thumbnail đại diện cho video để tối ưu tốc độ tải trên bảng tin [HomeFeedScreen.tsx](file:///d:/vivudemo1/src/screens/feed/HomeFeedScreen.tsx).
+- **2. Đăng Album nhiều ảnh HD**:
+  - Hỗ trợ chọn đồng thời tối đa 10 ảnh sắc nét, nén tối ưu dung lượng WebP bằng `expo-image-manipulator`.
+  - Hỗ trợ sắp xếp lại thứ tự ảnh trước khi xuất bản.
+- **3. Gắn thẻ Địa điểm & Bạn bè từ Dữ liệu Thật**:
+  - Ô tìm kiếm địa điểm kết nối trực tiếp với kho dữ liệu quán ăn, cafe, di tích đã cào từ Phân hệ 1.
+  - Danh sách chọn bạn bè gắn thẻ lấy từ danh sách bạn bè chính thức của người dùng.
+  - Tùy chọn chuyển đổi bài viết: "Chia sẻ khoảnh khắc" hoặc "Tuyển cạ đi chơi" (có thêm các trường: Thời gian hẹn, Địa điểm tập trung, Số lượng cạ cần tuyển, Chi phí ước tính).
+
+---
+
+### 10.7. Phân Hệ 6: Định Vị GPS Thời Gian Thực & Tính Khoảng Cách Địa Điểm (Real-time GPS Engine)
+
+```mermaid
+graph TD
+    DeviceGPS["1. GPS Thiết Bị Thực Tế\n(expo-location: High Accuracy GPS Coordinates)"]
+    
+    subgraph GeoEngine ["2. Động Cơ Định Vị & Tính Toán Khoảng Cách Tức Thì"]
+        ReverseGeo["Reverse Geocoding: Tự động nhận diện Phường, Quận, Tỉnh"]
+        Haversine["Thuật toán Haversine: Tính khoảng cách chính xác từ GPS đến tất cả quán ăn/di tích"]
+        DistanceBadges["Tạo Huy hiệu khoảng cách trực quan: 'Cách bạn 250m', '1.2km'"]
+    end
+
+    subgraph FiltersAndSort ["3. Bộ Lọc & Điều Hướng Thực Tế"]
+        RadiusFilter["Lọc bán kính động: 500m, 1km, 3km, 5km, 10km"]
+        SortNearest["Sắp xếp tự động từ gần nhất đến xa nhất"]
+        OpenNowFilter["Lọc quán đang mở cửa tại thời điểm hiện tại"]
+        NavigationApp["Mở ứng dụng bản đồ gốc (Google Maps / Apple Maps) để chỉ đường"]
+    end
+
+    DeviceGPS --> GeoEngine --> FiltersAndSort
+```
+
+#### Nhiệm vụ Kỹ thuật Chi tiết:
+- **1. Tích hợp GPS Thiết bị Thật**:
+  - Sử dụng `expo-location` xin quyền truy cập vị trí (`requestForegroundPermissionsAsync`), lấy tọa độ GPS chính xác (`LocationAccuracy.High`).
+  - Hiển thị vị trí thực tế của người dùng bằng chấm tròn xanh phát sáng trên bản đồ [MapScreen.tsx](file:///d:/vivudemo1/src/screens/discovery/MapScreen.tsx).
+  - Tự động nhận diện Tỉnh/Thành phố và Quận/Huyện hiện tại của người dùng bằng Reverse Geocoding.
+- **2. Động cơ tính khoảng cách thời gian thực (Real-time Distance Engine)**:
+  - Triển khai thuật toán tính khoảng cách Haversine chính xác:
+    $$d = 2R \times \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \varphi}{2}\right) + \cos(\varphi_1)\cos(\varphi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)}\right)$$
+  - Hiển thị khoảng cách trực tiếp trên từng thẻ địa điểm: `Cách bạn 150m`, `Cách bạn 800m`, `Cách bạn 2.5km`.
+  - Hỗ trợ bộ lọc bán kính linh hoạt: `Gần tôi (< 1km)`, `Khu vực (< 3km)`, `Toàn thành phố (< 10km)`.
+  - Bộ lọc kết hợp: "Đang mở cửa lúc này" (đối chiếu giờ hiện tại với `openingHours` đã cào) và "Đánh giá cao" ($\ge 4.5$ sao).
+  - Nút "Chỉ đường" (Directions): Tự động mở Google Maps hoặc Apple Maps với tọa độ đích chính xác để người dùng bắt đầu hành trình.
+
+---
+
+### 10.8. Phân Hệ 7: Nâng Cấp Giao Diện Hồ Sơ Đỉnh Cao (Premium Profile UI/UX & Trust Audit Log)
+
+```mermaid
+graph TB
+    subgraph HeaderSection ["1. Phần Đầu Hồ Sơ Đẳng Cấp"]
+        CoverBanner["Ảnh bìa toàn cảnh Panorama (Tùy chỉnh ảnh du lịch cá nhân)"]
+        AvatarAura["Avatar viền gradient hào quang Điểm Uy Tín\n(90-100đ: Ngọc bích, 70-89đ: Vàng kim, 50-69đ: Cam)"]
+        VerifiedBadges["Huy hiệu Tích xanh xác minh SĐT, CCCD, Email"]
+        BadgesScroll["Dải huy hiệu danh hiệu đạt được (Cạ cứng, Sành ăn, Đúng giờ 100%)"]
+    end
+
+    subgraph TabsSection ["2. Hệ Thống 3 Tab Nội Dung Phong Phú"]
+        TabGrid["Tab 1: Lưới Bài Viết & Video phong cách Instagram/TikTok\n(Hiển thị lượt thích, bình luận, icon Video)"]
+        TabTrips["Tab 2: Lịch sử các chuyến đi đã hoàn thành (Kèm tem GPS Check-in)"]
+        TabReviews["Tab 3: Đánh giá & Lời khen thực tế từ bạn đồng hành sau chuyến đi"]
+    end
+
+    subgraph TrustLogSheet ["3. Bảng Minh Bạch Lịch Sử Điểm Uy Tín (Bottom Sheet)"]
+        TrustDetail["Chi tiết lịch sử cộng/trừ điểm minh bạch 100%:\n+20đ Xác minh SĐT OTP\n+30đ Check-in GPS đúng giờ tại điểm hẹn\n+10đ Đánh giá 5 sao từ cạ cứng\n-20đ Hủy kèo không báo trước"]
+    end
+
+    HeaderSection --> TabsSection --> TrustLogSheet
+```
+
+#### Nhiệm vụ Kỹ thuật Chi tiết:
+- **1. Thiết kế Giao diện Hồ sơ Cá nhân Hiện đại, Đẳng cấp**:
+  - Nâng cấp toàn diện [ProfileScreen.tsx](file:///d:/vivudemo1/src/screens/profile/ProfileScreen.tsx) từ giao diện đơn sơ ban đầu sang chuẩn UI/UX cao cấp:
+    * Ảnh bìa Panorama sắc nét với hiệu ứng làm mờ nhẹ (Glassmorphism overlay), hỗ trợ thay đổi ảnh bìa từ thư viện.
+    * Ảnh đại diện Avatar với vòng viền Gradient phản ánh cấp độ Điểm Uy Tín:
+      - **Cấp Huyền Thoại (90 - 100 điểm)**: Viền Gradient Ngọc Bích lấp lánh (`#00F2FE` $\rightarrow$ `#4FACFE`).
+      - **Cấp Uy Tín Cao (70 - 89 điểm)**: Viền Gradient Hoàng Kim sang trọng (`#F6D365` $\rightarrow$ `#FDA085`).
+      - **Cấp Tiêu Chuẩn (50 - 69 điểm)**: Viền Gradient Cam Năng Động (`#FF9A8B` $\rightarrow$ `#FF6A88`).
+    * Huy hiệu tích xanh xác minh chính thức: "Đã xác thực CCCD & Số điện thoại".
+    * Dải danh hiệu thành tựu (Achievement Badges) cuộn ngang: "Cạ cứng du lịch", "Thổ địa sành ăn", "Tín đồ check-in", "Check-in đúng giờ 100%".
+- **2. Hệ Thống 3 Tab Nội Dung Chuyên Sâu**:
+  - **Tab 1: Thư viện Bài viết & Media**: Lưới 3 cột hiển thị tất cả ảnh & video đã đăng, có huy hiệu icon Video và số lượt xem/thả tim.
+  - **Tab 2: Chuyến đi đã tham gia**: Danh sách thẻ các buổi vi vu, ăn uống, du lịch đã check-in thành công cùng bạn bè.
+  - **Tab 3: Đánh giá từ bạn đồng hành**: Các phản hồi, lời nhận xét, số sao đánh giá thực tế từ những cạ cứng đã từng tham gia hoạt động cùng.
+- **3. Bảng Minh Bạch Lịch Sử Điểm Uy Tín (Trust Score Audit Log Sheet)**:
+  - Tích hợp Bottom Sheet hiển thị chi tiết từng giao dịch cộng/trừ điểm:
+    * Cột mốc thời gian, loại hành động, số điểm thay đổi (`+30đ`, `+20đ`, `-20đ`), lý do rõ ràng.
+    * Giúp người dùng hoàn toàn tin tưởng vào tính công bằng và an toàn của cộng đồng VIVU.
+
+---
+
+### 10.9. Bảng Phân Kỳ Nhiệm Vụ Chi Tiết (Sprint 9 -> Sprint 14) & Ma Trận Kiểm Soát An Toàn
+
+| Sprint | Hạng Mục Công Việc | Các Tệp Tin Liên Quan | Kết Quả Nghiệm Thu (Acceptance Criteria) | Kiểm Tra An Toàn (Safety Gate) |
+| :---: | :--- | :--- | :--- | :--- |
+| **Sprint 9** | **Cào dữ liệu 63 Tỉnh thành & Ẩm thực, Di tích Toàn quốc** | [crawler.service.ts](file:///d:/vivudemo1/backend/src/modules/crawler/crawler.service.ts)<br>[CitySelectScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/CitySelectScreen.tsx)<br>[database.ts](file:///d:/vivudemo1/backend/src/config/database.ts) | Cào thành công 63 tỉnh thành từ Wikidata + 1000+ quán ăn, cafe, di tích từ ShopeeFood/GrabFood/Traveloka. 100% ảnh HTTP 200, 0% quán ảo. | `npx tsc --noEmit` pass.<br>Không sửa xóa cấu trúc tệp cũ. |
+| **Sprint 10** | **Mạng Xã Hội Bạn Bè & Tìm Cạ Đồng Hành** | `backend/src/modules/friends/`<br>[MatchHomeScreen.tsx](file:///d:/vivudemo1/src/screens/match/MatchHomeScreen.tsx)<br>[MatchListScreen.tsx](file:///d:/vivudemo1/src/screens/match/MatchListScreen.tsx) | Tìm kiếm bạn bè đa tiêu chí, gửi/nhận lời mời kết bạn, danh sách bạn bè với trạng thái Online/Offline và nút chat 1 chạm. | Schema Prisma backward compatible.<br>TypeScript 0 errors. |
+| **Sprint 11** | **Nâng Cấp Tin Nhắn Đa Phương Tiện & Thoại Thực Tế** | [PersonalChatScreen.tsx](file:///d:/vivudemo1/src/screens/chat/PersonalChatScreen.tsx)<br>[GroupChatScreen.tsx](file:///d:/vivudemo1/src/screens/chat/GroupChatScreen.tsx)<br>[socket.ts](file:///d:/vivudemo1/src/services/socket.ts) | Thu âm và phát âm thanh thật (Voice audio), thả Emoji reaction, trả lời trích dẫn, thu hồi tin nhắn, 2 tick xanh. | Cài đặt `expo-av` chuẩn SDK 57.<br>Không xóa UI chat hiện tại. |
+| **Sprint 12** | **Xác Thực Thực Tế (Google, Apple & SMS OTP Thật)** | `backend/src/modules/auth/`<br>[OtpVerificationScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/OtpVerificationScreen.tsx)<br>[LoginScreen.tsx](file:///d:/vivudemo1/src/screens/onboarding/LoginScreen.tsx) | Gửi mã OTP 6 số về SIM điện thoại thật (SMS Gateway) đếm ngược 60s, đăng nhập Google & Apple thật, cộng +20đ uy tín. | Rate limiting 3 lần/10 phút.<br>JWT mã hóa an toàn. |
+| **Sprint 13** | **Tạo Bài Viết Video Có Âm Thanh & Album Ảnh HD** | [CreatePostScreen.tsx](file:///d:/vivudemo1/src/screens/feed/CreatePostScreen.tsx)<br>[HomeFeedScreen.tsx](file:///d:/vivudemo1/src/screens/feed/HomeFeedScreen.tsx)<br>[feedStore.ts](file:///d:/vivudemo1/src/stores/feedStore.ts) | Tải lên video có tiếng kèm nút bật/tắt âm thanh, chọn tối đa 10 ảnh HD, gắn thẻ quán ăn/di tích cào thật, tuyển cạ vi vu. | Video nén tối ưu băng thông.<br>Zustand state tương thích ngược. |
+| **Sprint 14** | **Bản Đồ GPS Thực Tế & Hồ Sơ Cá Nhân Đỉnh Cao** | [MapScreen.tsx](file:///d:/vivudemo1/src/screens/discovery/MapScreen.tsx)<br>[ProfileScreen.tsx](file:///d:/vivudemo1/src/screens/profile/ProfileScreen.tsx)<br>[authStore.ts](file:///d:/vivudemo1/src/stores/authStore.ts) | GPS thiết bị thật, tính khoảng cách Haversine tức thì, hồ sơ cao cấp với ảnh bìa, hào quang gradient uy tín, 3 tab media/trips/reviews, audit log sheet. | `npx expo-doctor` 21/21 checks.<br>Physical device 100% mượt mà. |
+
+---
+
+*Tài liệu kế hoạch công việc Giai đoạn 3 được tích hợp đồng bộ vào hệ thống mã nguồn VIVU.*
+
 
