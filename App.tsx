@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  LogBox,
   Platform,
   StatusBar as RNStatusBar,
   StyleSheet,
@@ -10,6 +11,13 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+
+// Bỏ qua cảnh báo kết nối Expo CLI không ảnh hưởng tính năng khi test qua Wi-Fi
+LogBox.ignoreLogs([
+  'Cannot connect to Expo CLI',
+  'SafeAreaView has been deprecated',
+]);
+
 
 
 import { ScreenNavigatorModal } from './src/components/ScreenNavigatorModal';
