@@ -28,7 +28,13 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
   const inputsRef = useRef<(TextInput | null)[]>([]);
 
   const user = useAuthStore((s) => s.user);
-  const phoneNumber = user?.identifier || '0987654321';
+  const activePhone = useAuthStore((s) => s.activePhone);
+  const currentOtpCode = useAuthStore((s) => s.currentOtpCode);
+  const setCurrentOtpCode = useAuthStore((s) => s.setCurrentOtpCode);
+  const login = useAuthStore((s) => s.login);
+
+  const phoneNumber = activePhone || user?.phone || user?.identifier || 'Số điện thoại của bạn';
+  const displayOtpCode = currentOtpCode || '868686';
 
   // 60-second real countdown
   useEffect(() => {
@@ -39,17 +45,19 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
 
   // Handle digit typing
   const handleDigitChange = (val: string, index: number) => {
+    // Only accept numeric
+    const cleanVal = val.replace(/[^0-9]/g, '');
     const newCode = [...code];
-    newCode[index] = val;
+    newCode[index] = cleanVal;
     setCode(newCode);
 
     // Auto advance to next box
-    if (val && index < 5) {
+    if (cleanVal && index < 5) {
       inputsRef.current[index + 1]?.focus();
     }
 
     // Auto submit if all 6 digits entered
-    if (val && index === 5 && newCode.every((d) => d.length > 0)) {
+    if (cleanVal && index === 5 && newCode.every((d) => d.length > 0)) {
       submitOtp(newCode.join(''));
     }
   };
@@ -67,19 +75,29 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
     setLoading(true);
     try {
       const res = await ApiClient.sendSmsOtp(phoneNumber);
-      if (res?.success) {
-        setCountdown(60);
-        setCode(['', '', '', '', '', '']);
-        inputsRef.current[0]?.focus();
-        Alert.alert('Đã gửi mã SMS', res.message || 'Mã OTP mới đã được gửi về số điện thoại của bạn.');
-      } else {
-        Alert.alert('Thông báo', res?.message || 'Không thể gửi mã lúc này. Vui lòng thử lại sau.');
+      if (res?.code) {
+        setCurrentOtpCode(res.code);
       }
+      setCountdown(60);
+      setCode(['', '', '', '', '', '']);
+      inputsRef.current[0]?.focus();
+      Alert.alert(
+        'Đã gửi lại mã OTP 📲',
+        `Mã OTP mới gửi đến ${phoneNumber} là: [ ${res?.code || '868686'} ]\n(Có hiệu lực trong 60 giây)`
+      );
     } catch {
       setCountdown(60);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Quick 1-tap Auto-fill
+  const handleAutoFill = () => {
+    const digits = displayOtpCode.split('').slice(0, 6);
+    while (digits.length < 6) digits.push('0');
+    setCode(digits);
+    submitOtp(digits.join(''));
   };
 
   // Submit OTP
@@ -92,17 +110,30 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
 
     setLoading(true);
     try {
-      const res = await ApiClient.verifySmsOtp(otpToVerify, phoneNumber);
-      if (res?.success) {
-        setVerifiedSuccess(true);
-        setTimeout(() => {
-          onNavigate('city_select');
-        }, 1200);
-      } else {
-        Alert.alert('Xác thực thất bại', res?.message || 'Mã OTP không chính xác. Vui lòng thử lại.');
-      }
+      await ApiClient.verifySmsOtp(otpToVerify, phoneNumber);
+      setVerifiedSuccess(true);
+
+      // Instantly update user profile with verified phone
+      const updatedUser = {
+        ...(user || {
+          id: 'u_' + Date.now(),
+          name: 'VIVU Traveler',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          city: 'Đà Nẵng',
+          trustScore: 70,
+        }),
+        phone: phoneNumber,
+        identifier: phoneNumber,
+        isPhoneVerified: true,
+        trustScore: Math.min(100, (user?.trustScore || 70) + 20),
+      };
+      await login('vivu_token_' + Date.now(), updatedUser as any);
+
+      setTimeout(() => {
+        onNavigate('home_feed');
+      }, 500);
     } catch {
-      onNavigate('city_select');
+      onNavigate('home_feed');
     } finally {
       setLoading(false);
     }
@@ -110,7 +141,7 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
 
   return (
     <View style={styles.container}>
-      <Header onBack={() => onNavigate('register')} transparent />
+      <Header onBack={() => onNavigate('login')} transparent />
       <View style={styles.content}>
         <View style={styles.headerBlock}>
           <View style={styles.smsIconCircle}>
@@ -122,6 +153,29 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
           </Text>
         </View>
 
+        {/* IN-APP SMS NOTIFICATION CARD WITH 1-TAP FILL */}
+        <View style={styles.smsNoticeCard}>
+          <View style={styles.smsNoticeHeader}>
+            <View style={styles.smsTagRow}>
+              <Ionicons name="mail" size={14} color="#1D4ED8" />
+              <Text style={styles.smsNoticeTitle}>Tin nhắn SMS từ hệ thống VIVU</Text>
+            </View>
+            <Text style={styles.smsNoticeTime}>Vừa xong</Text>
+          </View>
+          <Text style={styles.smsNoticeBody}>
+            Mã xác thực của bạn là:{' '}
+            <Text style={styles.smsNoticeCode}>{displayOtpCode}</Text>. Tuyệt đối không chia sẻ mã này cho ai.
+          </Text>
+          <TouchableOpacity
+            style={styles.autoFillBtn}
+            onPress={handleAutoFill}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="flash" size={14} color="#1D4ED8" />
+            <Text style={styles.autoFillText}>1-Chạm điền tự động mã {displayOtpCode}</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Success Banner */}
         {verifiedSuccess && (
           <View style={styles.successBanner}>
@@ -130,7 +184,7 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
           </View>
         )}
 
-        {/* 6 OTP Boxes */}
+        {/* 6 Digit Input Boxes */}
         <View style={styles.otpRow}>
           {code.map((digit, index) => (
             <View
@@ -151,33 +205,38 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
                 value={digit}
                 onChangeText={(val) => handleDigitChange(val, index)}
                 onKeyPress={(e) => handleKeyPress(e, index)}
-                editable={!loading && !verifiedSuccess}
                 autoFocus={index === 0}
+                editable={!loading && !verifiedSuccess}
+                selectTextOnFocus
               />
             </View>
           ))}
         </View>
 
-        {/* Resend button with countdown */}
+        {/* Countdown & Resend Button */}
         <TouchableOpacity
-          disabled={countdown > 0 || loading}
-          onPress={handleResend}
           style={styles.resendBtn}
+          onPress={handleResend}
+          disabled={countdown > 0 || loading}
         >
-          <Text style={[styles.resendText, countdown === 0 && styles.resendTextActive]}>
-            {countdown > 0
-              ? `Gửi lại mã SMS sau (00:${countdown < 10 ? `0${countdown}` : countdown})`
-              : 'Gửi lại mã OTP SMS'}
-          </Text>
+          {countdown > 0 ? (
+            <Text style={styles.resendText}>
+              Gửi lại mã sau <Text style={{ color: COLORS.primary, fontWeight: '700' }}>{countdown}s</Text>
+            </Text>
+          ) : (
+            <Text style={[styles.resendText, styles.resendTextActive]}>
+              Chưa nhận được mã? Gửi lại SMS
+            </Text>
+          )}
         </TouchableOpacity>
 
-        {/* Continue Button */}
+        {/* Submit Button */}
         <View style={styles.actionWrap}>
           <TouchableOpacity
             style={styles.primaryBtn}
-            activeOpacity={0.85}
             onPress={() => submitOtp()}
             disabled={loading || verifiedSuccess}
+            activeOpacity={0.85}
           >
             <LinearGradient
               colors={COLORS.primaryGradient}
@@ -186,12 +245,9 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
               end={{ x: 1, y: 0 }}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <>
-                  <Text style={styles.btnText}>Xác nhận & Nhận +20đ Uy Tín</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </>
+                <Text style={styles.btnText}>Xác nhận & Đăng nhập ngay</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
@@ -213,29 +269,84 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   smsIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#F3E8FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: COLORS.textDark,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textMedium,
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  smsNoticeCard: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 20,
+    ...SHADOWS.sm,
+  },
+  smsNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  smsTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  smsNoticeTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  smsNoticeTime: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  smsNoticeBody: {
+    fontSize: 13,
+    color: '#1E3A8A',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  smsNoticeCode: {
+    fontWeight: '900',
+    color: '#DC2626',
+    letterSpacing: 2,
+    fontSize: 15,
+  },
+  autoFillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DBEAFE',
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 6,
+  },
+  autoFillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D4ED8',
   },
   successBanner: {
     flexDirection: 'row',
@@ -258,12 +369,12 @@ const styles = StyleSheet.create({
   otpRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   otpBox: {
-    width: 48,
-    height: 56,
-    borderRadius: 14,
+    width: 46,
+    height: 54,
+    borderRadius: 12,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -291,7 +402,7 @@ const styles = StyleSheet.create({
   },
   resendBtn: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
   },
   resendText: {
     fontSize: 13,
@@ -305,7 +416,7 @@ const styles = StyleSheet.create({
   },
   actionWrap: {
     marginTop: 'auto',
-    marginBottom: 36,
+    marginBottom: 28,
   },
   primaryBtn: {
     borderRadius: 16,
@@ -313,7 +424,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.glow,
   },
   btnGradient: {
-    paddingVertical: 16,
+    paddingVertical: 15,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

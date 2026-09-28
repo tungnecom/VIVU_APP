@@ -18,7 +18,12 @@ interface AuthState {
     notifications: boolean;
   };
 
+  activePhone: string;
+  currentOtpCode: string;
+
   // Actions
+  setActivePhone: (phone: string) => void;
+  setCurrentOtpCode: (code: string) => void;
   setCity: (city: string) => void;
   setGoals: (goals: string[]) => void;
   setInterests: (interests: string[]) => void;
@@ -44,7 +49,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     messages: true,
     notifications: false,
   },
+  activePhone: '',
+  currentOtpCode: '',
 
+  setActivePhone: (phone) => set({ activePhone: phone }),
+  setCurrentOtpCode: (code) => set({ currentOtpCode: code }),
   setCity: (city) => set({ selectedCity: city }),
   setGoals: (goals) => set({ selectedGoals: goals }),
   setInterests: (interests) => set({ selectedInterests: interests }),

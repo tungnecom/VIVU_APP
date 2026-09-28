@@ -24,42 +24,59 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
-  const [identifier, setIdentifier] = useState('0987654321');
-  const [password, setPassword] = useState('••••••••');
+  const activePhone = useAuthStore((s) => s.activePhone);
+  const setActivePhone = useAuthStore((s) => s.setActivePhone);
+  const setCurrentOtpCode = useAuthStore((s) => s.setCurrentOtpCode);
+  const login = useAuthStore((s) => s.login);
+
+  const [identifier, setIdentifier] = useState(activePhone || '');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const login = useAuthStore((s) => s.login);
 
   // Check if identifier is phone number
   const isPhone = /^(0|\+84)[0-9]{8,10}$/.test(identifier.trim());
 
   // Handle standard password / phone login
   const handleLogin = async () => {
-    if (!identifier.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại hoặc email.');
+    const rawId = identifier.trim();
+    if (!rawId) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại hoặc email của bạn.');
       return;
     }
+    setActivePhone(rawId);
     setLoading(true);
     try {
-      // If user typed phone and wants quick OTP:
+      // If user typed phone number: trigger quick OTP
       if (isPhone) {
-        await ApiClient.sendSmsOtp(identifier.trim());
-        // update user identifier in authStore
+        const res = await ApiClient.sendSmsOtp(rawId);
+        if (res?.code) {
+          setCurrentOtpCode(res.code);
+        }
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
-          useAuthStore.setState({ user: { ...currentUser, identifier: identifier.trim(), phone: identifier.trim() } });
+          useAuthStore.setState({ user: { ...currentUser, identifier: rawId, phone: rawId } });
         }
-        onNavigate('otp');
+        Alert.alert(
+          'Mã Xác Thực OTP 📲',
+          `Mã OTP xác thực gửi về ${rawId} là: [ ${res?.code || '868686'} ]\n(Mã có hiệu lực trong 60 giây)`,
+          [
+            {
+              text: 'Nhập mã ngay',
+              onPress: () => onNavigate('otp'),
+            },
+          ]
+        );
         return;
       }
 
       // Email/password regular login
       const dummyUser = {
-        id: 'u_logged_in',
-        name: identifier.split('@')[0] || 'VIVU Explorer',
+        id: 'u_' + Date.now(),
+        name: rawId.split('@')[0] || 'VIVU Explorer',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
-        identifier: identifier.trim(),
+        identifier: rawId,
+        phone: rawId,
         trustScore: 85,
         rating: 4.9,
         reviewCount: 24,
@@ -77,19 +94,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
 
   // Quick SMS OTP login
   const handleSmsOtpLogin = async () => {
-    if (!identifier.trim()) {
-      Alert.alert('Nhập số điện thoại', 'Vui lòng nhập số điện thoại để nhận mã OTP.');
+    const phone = identifier.trim();
+    if (!phone) {
+      Alert.alert('Nhập số điện thoại', 'Vui lòng nhập số điện thoại của bạn để nhận mã OTP.');
       return;
     }
+    setActivePhone(phone);
     setLoading(true);
     try {
-      const res = await ApiClient.sendSmsOtp(identifier.trim());
+      const res = await ApiClient.sendSmsOtp(phone);
+      if (res?.code) {
+        setCurrentOtpCode(res.code);
+      }
       const currentUser = useAuthStore.getState().user;
       if (currentUser) {
-        useAuthStore.setState({ user: { ...currentUser, identifier: identifier.trim(), phone: identifier.trim() } });
+        useAuthStore.setState({ user: { ...currentUser, identifier: phone, phone } });
       }
-      Alert.alert('Đã gửi mã SMS OTP', res?.message || 'Mã xác thực 6 số đã được gửi qua SMS đến máy bạn.');
-      onNavigate('otp');
+      Alert.alert(
+        'Mã Xác Thực OTP 📲',
+        `Mã OTP xác thực gửi về ${phone} là: [ ${res?.code || '868686'} ]\n(Mã có hiệu lực trong 60 giây)`,
+        [
+          {
+            text: 'Nhập mã ngay',
+            onPress: () => onNavigate('otp'),
+          },
+        ]
+      );
     } catch {
       onNavigate('otp');
     } finally {

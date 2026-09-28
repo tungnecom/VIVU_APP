@@ -24,28 +24,44 @@ interface RegisterScreenProps {
 }
 
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
-  const [identifier, setIdentifier] = useState('0987654321');
-  const [password, setPassword] = useState('••••••••');
+  const activePhone = useAuthStore((s) => s.activePhone);
+  const setActivePhone = useAuthStore((s) => s.setActivePhone);
+  const setCurrentOtpCode = useAuthStore((s) => s.setCurrentOtpCode);
+  const login = useAuthStore((s) => s.login);
+
+  const [identifier, setIdentifier] = useState(activePhone || '');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const login = useAuthStore((s) => s.login);
-
   // Handle register and send real SMS OTP
   const handleRegister = async () => {
-    if (!identifier.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại hoặc email.');
+    const rawId = identifier.trim();
+    if (!rawId) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại hoặc email của bạn.');
       return;
     }
+    setActivePhone(rawId);
     setLoading(true);
     try {
-      const res = await ApiClient.sendSmsOtp(identifier.trim());
+      const res = await ApiClient.sendSmsOtp(rawId);
+      if (res?.code) {
+        setCurrentOtpCode(res.code);
+      }
       const currentUser = useAuthStore.getState().user;
       if (currentUser) {
-        useAuthStore.setState({ user: { ...currentUser, identifier: identifier.trim(), phone: identifier.trim() } });
+        useAuthStore.setState({ user: { ...currentUser, identifier: rawId, phone: rawId } });
       }
-      Alert.alert('Mã OTP xác thực', res?.message || 'Mã xác thực 6 số đã được gửi qua SMS đến số của bạn.');
-      onNavigate('otp');
+      Alert.alert(
+        'Mã Xác Thực OTP 📲',
+        `Mã OTP xác thực gửi về ${rawId} là: [ ${res?.code || '868686'} ]\n(Mã có hiệu lực trong 60 giây)`,
+        [
+          {
+            text: 'Nhập mã ngay',
+            onPress: () => onNavigate('otp'),
+          },
+        ]
+      );
     } catch {
       onNavigate('otp');
     } finally {
