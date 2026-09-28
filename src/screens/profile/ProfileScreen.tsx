@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { CURRENT_USER } from '../../constants/mockData';
@@ -26,19 +28,98 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
   const user = useAuthStore((s) => s.user);
   const selectedCity = useAuthStore((s) => s.selectedCity) || 'Đà Nẵng';
   const selectedInterests = useAuthStore((s) => s.selectedInterests);
-  const communicationStyle = useAuthStore((s) => s.communicationStyle) || 'Cân bằng';
+  const communicationStyle = useAuthStore((s) => s.communicationStyle) || 'Cởi mở, thích khám phá';
   const logout = useAuthStore((s) => s.logout);
 
-
+  const [activeTab, setActiveTab] = useState<'media' | 'trips' | 'reviews'>('media');
+  const [showTrustAuditModal, setShowTrustAuditModal] = useState(false);
+  const [coverPhoto, setCoverPhoto] = useState(
+    'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200'
+  );
   const [crawling, setCrawling] = useState(false);
 
-  const trustBreakdown = [
-    { label: 'Xác thực tài khoản (CCCD/SĐT)', score: '20/20', isFull: true },
-    { label: 'Hoạt động dã ngoại & giao lưu', score: '30/30', isFull: true },
-    { label: 'Đánh giá tích cực từ bạn bè', score: '19/20', isFull: false },
-    { label: 'Tỷ lệ tham gia đúng hẹn', score: '15/15', isFull: true },
-    { label: 'Phản hồi cộng đồng tích cực', score: '5/5', isFull: true },
-    { label: 'Lịch sử vi phạm quy tắc', score: '0/0 (Tốt)', isFull: true },
+  const trustScore = user?.trustScore || 94;
+
+  // Change Cover Photo
+  const handleChangeCover = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Quyền truy cập', 'VIVU cần quyền truy cập ảnh để đổi ảnh bìa.');
+      return;
+    }
+
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.85,
+    });
+
+    if (!res.canceled && res.assets && res.assets.length > 0) {
+      setCoverPhoto(res.assets[0].uri);
+    }
+  };
+
+  // Mock Media Grid (Instagram/TikTok 3-column)
+  const mediaGrid = [
+    { id: 'm1', type: 'video', uri: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500', duration: '0:15' },
+    { id: 'm2', type: 'image', uri: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500' },
+    { id: 'm3', type: 'image', uri: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500' },
+    { id: 'm4', type: 'video', uri: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500', duration: '0:22' },
+    { id: 'm5', type: 'image', uri: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=500' },
+    { id: 'm6', type: 'image', uri: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500' },
+  ];
+
+  // Mock Trip History
+  const tripHistory = [
+    {
+      id: 't1',
+      title: 'Food Tour Chợ Đêm & Hải Sản Năm Đảnh',
+      date: 'Thứ 7, 18/05/2025',
+      location: 'Sơn Trà, Đà Nẵng',
+      status: 'Đã hoàn thành',
+      companions: 4,
+      image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400',
+    },
+    {
+      id: 't2',
+      title: 'Đổ đèo Hải Vân săn mây bình minh',
+      date: 'Chủ nhật, 12/05/2025',
+      location: 'Đèo Hải Vân, Đà Nẵng',
+      status: 'Đã hoàn thành',
+      companions: 6,
+      image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400',
+    },
+  ];
+
+  // Mock Peer Reviews
+  const peerReviews = [
+    {
+      id: 'r1',
+      author: 'Minh Thư',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      rating: 5,
+      date: '2 ngày trước',
+      tripName: 'Food Tour Chợ Đêm',
+      comment: 'Tùng rất đúng giờ, vui tính và chọn quán ăn cực kỳ chuẩn vị! 10/10 điểm uy tín!',
+    },
+    {
+      id: 'r2',
+      author: 'Quang Anh',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      rating: 5,
+      date: '1 tuần trước',
+      tripName: 'Săn mây Hải Vân',
+      comment: 'Lái xe rất an toàn, chụp ảnh cho cả nhóm siêu có tâm. Lần sau chắc chắn ghép cạ tiếp!',
+    },
+  ];
+
+  // Achievement Badges
+  const achievementBadges = [
+    { id: 'b1', icon: 'shield-checkmark', title: 'CCCD & SĐT Xác thực', color: '#059669', bg: '#ECFDF5' },
+    { id: 'b2', icon: 'ribbon', title: 'Cạ Cứng Du Lịch', color: '#3B82F6', bg: '#EFF6FF' },
+    { id: 'b3', icon: 'restaurant', title: 'Thổ Địa Sành Ăn', color: '#F59E0B', bg: '#FFFBEB' },
+    { id: 'b4', icon: 'trophy', title: 'Uy Tín Vàng 90+', color: '#8B5CF6', bg: '#F5F3FF' },
   ];
 
   const handleTriggerCrawler = async () => {
@@ -79,120 +160,276 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
 
   return (
     <View style={styles.container}>
-      {/* Top Bar */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Hồ sơ cá nhân</Text>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => onNavigate('privacy_setting')}
-          >
-            <Ionicons name="settings-outline" size={20} color={COLORS.textDark} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => Alert.alert('Chia sẻ', 'Chia sẻ hồ sơ VIVU của bạn')}
-          >
-            <Ionicons name="share-social-outline" size={20} color={COLORS.textDark} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* User Card */}
-        <View style={styles.userCard}>
-          <Image
-            source={{
-              uri:
-                user?.avatar ||
-                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-            }}
-            style={styles.avatar}
+        {/* Panoramic Cover Photo Banner */}
+        <View style={styles.coverWrapper}>
+          <Image source={{ uri: coverPhoto }} style={styles.coverImage} resizeMode="cover" />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.6)']}
+            style={styles.coverGradient}
           />
+          <TouchableOpacity style={styles.changeCoverBtn} onPress={handleChangeCover}>
+            <Ionicons name="camera" size={16} color="#FFF" />
+            <Text style={styles.changeCoverText}>Đổi ảnh bìa</Text>
+          </TouchableOpacity>
+
+          <View style={styles.coverTopActions}>
+            <TouchableOpacity
+              style={styles.iconCircleBtn}
+              onPress={() => onNavigate('privacy_setting')}
+            >
+              <Ionicons name="settings-outline" size={20} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconCircleBtn}
+              onPress={() => Alert.alert('Chia sẻ', 'Đã sao chép link hồ sơ cá nhân!')}
+            >
+              <Ionicons name="share-social-outline" size={20} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Profile Info Overlay Card */}
+        <View style={styles.profileCard}>
+          {/* Avatar with Trust Score Aura Glow */}
+          <View style={styles.avatarContainer}>
+            <LinearGradient
+              colors={
+                trustScore >= 90
+                  ? ['#00F2FE', '#4FACFE', '#6366F1']
+                  : trustScore >= 80
+                  ? ['#34D399', '#10B981', '#059669']
+                  : ['#FBBF24', '#F59E0B', '#D97706']
+              }
+              style={styles.auraGlow}
+            >
+              <Image
+                source={{
+                  uri:
+                    user?.avatar ||
+                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=250',
+                }}
+                style={styles.avatarImage}
+              />
+            </LinearGradient>
+            <View style={styles.verifiedFloatingBadge}>
+              <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+            </View>
+          </View>
+
+          {/* User Name & Bio */}
           <Text style={styles.userName}>{user?.name || CURRENT_USER.name}</Text>
-          <View style={styles.cityBadge}>
-            <Ionicons name="location-sharp" size={14} color={COLORS.primary} />
-            <Text style={styles.cityText}>{selectedCity}</Text>
-            <Text style={styles.socialStyleText}>• Phong cách: {communicationStyle}</Text>
+
+          <View style={styles.verifiedRow}>
+            <Ionicons name="shield-checkmark" size={14} color="#059669" />
+            <Text style={styles.verifiedText}>Đã xác thực CCCD & Số điện thoại</Text>
           </View>
 
-          <View style={styles.activeTag}>
-            <Text style={styles.activeTagText}>⭐ {CURRENT_USER.badge}</Text>
-          </View>
+          <Text style={styles.userBio}>
+            📍 {selectedCity} • 🎒 Phong cách: {communicationStyle}
+          </Text>
 
-          {/* Counts */}
-          <View style={styles.statsRow}>
+          {/* Interactive Trust Score Capsule (tap opens transparent breakdown) */}
+          <TouchableOpacity
+            style={styles.trustScorePill}
+            activeOpacity={0.85}
+            onPress={() => setShowTrustAuditModal(true)}
+          >
+            <LinearGradient
+              colors={['#00F2FE', '#4FACFE']}
+              style={styles.trustGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="shield" size={16} color="#FFF" />
+              <Text style={styles.trustScorePillText}>Điểm Uy Tín: {trustScore}/100</Text>
+              <View style={styles.auditHelpTag}>
+                <Text style={styles.auditHelpText}>Bảng kê minh bạch ↗</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Counts Bar */}
+          <View style={styles.statsBar}>
             <View style={styles.statCol}>
-              <Text style={styles.statNum}>{CURRENT_USER.postsCount}</Text>
+              <Text style={styles.statNum}>{CURRENT_USER.postsCount || 12}</Text>
               <Text style={styles.statLabel}>Bài viết</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statNum}>{CURRENT_USER.activitiesCount}</Text>
-              <Text style={styles.statLabel}>Hoạt động</Text>
+              <Text style={styles.statNum}>{CURRENT_USER.activitiesCount || 16}</Text>
+              <Text style={styles.statLabel}>Chuyến đi</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statNum}>{CURRENT_USER.friendsCount}</Text>
-              <Text style={styles.statLabel}>Bạn bè</Text>
+              <Text style={styles.statNum}>{CURRENT_USER.friendsCount || 148}</Text>
+              <Text style={styles.statLabel}>Cạ cứng</Text>
             </View>
           </View>
-        </View>
 
-        {/* Điểm uy tín Card */}
-        <View style={styles.trustScoreCard}>
-          <View style={styles.trustScoreHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.trustTitle}>Điểm uy tín VIVU (Trust Score)</Text>
-              <Text style={styles.trustSub}>Bảo vệ môi trường văn minh, triệt tiêu tài khoản ảo</Text>
-            </View>
-            <LinearGradient
-              colors={COLORS.primaryGradient}
-              style={styles.scoreCircle}
-            >
-              <Text style={styles.scoreCircleNum}>{user?.trustScore || 94}</Text>
-              <Text style={styles.scoreCircleMax}>/100</Text>
-            </LinearGradient>
-          </View>
-
-          {/* Breakdown Items */}
-          <View style={styles.breakdownList}>
-            {trustBreakdown.map((item, idx) => (
-              <View key={idx} style={styles.breakdownItem}>
-                <View style={styles.itemLeft}>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={18}
-                    color={item.isFull ? COLORS.success : COLORS.primary}
-                  />
-                  <Text style={styles.breakdownLabel}>{item.label}</Text>
-                </View>
-                <Text style={styles.breakdownScore}>{item.score}</Text>
+          {/* Achievement Badges Carousel */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.badgesScroll}
+          >
+            {achievementBadges.map((b) => (
+              <View key={b.id} style={[styles.badgeChip, { backgroundColor: b.bg }]}>
+                <Ionicons name={b.icon as any} size={15} color={b.color} />
+                <Text style={[styles.badgeTitle, { color: b.color }]}>{b.title}</Text>
               </View>
             ))}
-          </View>
+          </ScrollView>
+        </View>
+
+        {/* 3-Tab Navigation Segment */}
+        <View style={styles.tabBarWrap}>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'media' && styles.tabItemActive]}
+            onPress={() => setActiveTab('media')}
+          >
+            <Ionicons
+              name="grid"
+              size={18}
+              color={activeTab === 'media' ? COLORS.primary : COLORS.textLight}
+            />
+            <Text
+              style={[
+                styles.tabItemText,
+                activeTab === 'media' && styles.tabItemTextActive,
+              ]}
+            >
+              Khoảnh khắc ({mediaGrid.length})
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.trustDetailBtn}
-            onPress={() =>
-              Alert.alert(
-                'Minh bạch Điểm Uy Tín',
-                'Hệ thống AI tự động phân tích: Check-in hoạt động (+30đ), Đánh giá địa điểm xác thực (+5đ), Báo cáo vi phạm (-50đ).'
-              )
-            }
+            style={[styles.tabItem, activeTab === 'trips' && styles.tabItemActive]}
+            onPress={() => setActiveTab('trips')}
           >
-            <Text style={styles.trustDetailText}>Tìm hiểu cơ chế chấm điểm minh bạch ↗</Text>
+            <Ionicons
+              name="compass"
+              size={18}
+              color={activeTab === 'trips' ? COLORS.primary : COLORS.textLight}
+            />
+            <Text
+              style={[
+                styles.tabItemText,
+                activeTab === 'trips' && styles.tabItemTextActive,
+              ]}
+            >
+              Hành trình ({tripHistory.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'reviews' && styles.tabItemActive]}
+            onPress={() => setActiveTab('reviews')}
+          >
+            <Ionicons
+              name="star"
+              size={18}
+              color={activeTab === 'reviews' ? COLORS.primary : COLORS.textLight}
+            />
+            <Text
+              style={[
+                styles.tabItemText,
+                activeTab === 'reviews' && styles.tabItemTextActive,
+              ]}
+            >
+              Đánh giá cạ ({peerReviews.length})
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Zero-Garbage Pipeline Ingestion Tool */}
+        {/* Tab 1: Media Grid (Instagram/TikTok 3-column) */}
+        {activeTab === 'media' && (
+          <View style={styles.mediaGridContainer}>
+            {mediaGrid.map((m) => (
+              <TouchableOpacity
+                key={m.id}
+                style={styles.gridThumbWrap}
+                activeOpacity={0.8}
+                onPress={() => onNavigate('home_feed')}
+              >
+                <Image source={{ uri: m.uri }} style={styles.gridThumbImage} />
+                {m.type === 'video' && (
+                  <View style={styles.gridVideoBadge}>
+                    <Ionicons name="play" size={12} color="#FFF" />
+                    <Text style={styles.gridVideoDuration}>{m.duration}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Tab 2: Trip History */}
+        {activeTab === 'trips' && (
+          <View style={styles.tripsListContainer}>
+            {tripHistory.map((trip) => (
+              <View key={trip.id} style={styles.tripCard}>
+                <Image source={{ uri: trip.image }} style={styles.tripCardImage} />
+                <View style={styles.tripCardContent}>
+                  <View style={styles.tripStatusTag}>
+                    <Text style={styles.tripStatusText}>{trip.status}</Text>
+                  </View>
+                  <Text style={styles.tripTitle}>{trip.title}</Text>
+                  <Text style={styles.tripMeta}>📅 {trip.date} • 📍 {trip.location}</Text>
+                  <Text style={styles.tripCompanions}>👥 Đã đi cùng {trip.companions} cạ cứng</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Tab 3: Peer Reviews */}
+        {activeTab === 'reviews' && (
+          <View style={styles.reviewsListContainer}>
+            {peerReviews.map((rev) => (
+              <View key={rev.id} style={styles.reviewCard}>
+                <View style={styles.reviewHeader}>
+                  <Image source={{ uri: rev.avatar }} style={styles.reviewAvatar} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.reviewAuthor}>{rev.author}</Text>
+                    <Text style={styles.reviewDate}>{rev.date} • Chuyến: {rev.tripName}</Text>
+                  </View>
+                  <Text style={styles.reviewRating}>⭐ {rev.rating}.0</Text>
+                </View>
+                <Text style={styles.reviewComment}>"{rev.comment}"</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Interests Section */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionHeading}>Sở thích du lịch & khám phá</Text>
+          <View style={styles.interestWrap}>
+            {displayInterests.map((interest, i) => (
+              <View key={i} style={styles.interestChip}>
+                <Ionicons name="sparkles" size={12} color={COLORS.primary} />
+                <Text style={styles.interestText}>{interest}</Text>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={styles.addInterestChip}
+              onPress={() => onNavigate('interest_select')}
+            >
+              <Ionicons name="add" size={14} color={COLORS.primary} />
+              <Text style={styles.addInterestText}>Sửa</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Zero-Garbage Pipeline Admin Tool */}
         <View style={styles.engineCard}>
           <View style={styles.engineHeader}>
             <Ionicons name="sparkles" size={20} color="#10B981" />
             <View style={{ flex: 1 }}>
               <Text style={styles.engineTitle}>Zero-Garbage Data Engine</Text>
               <Text style={styles.engineSub}>
-                Cào Wikimedia & Traveloka • Lọc 5 tầng không rác ảo tại {selectedCity}
+                Cào Wikimedia, ShopeeFood, GrabFood & Traveloka tại {selectedCity}
               </Text>
             </View>
           </View>
@@ -212,27 +449,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Sở thích đã chọn */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionHeading}>Sở thích của tôi</Text>
-          <View style={styles.interestWrap}>
-            {displayInterests.map((interest, i) => (
-              <View key={i} style={styles.interestChip}>
-                <Ionicons name="sparkles" size={12} color={COLORS.primary} />
-                <Text style={styles.interestText}>{interest}</Text>
-              </View>
-            ))}
-            <TouchableOpacity
-              style={styles.addInterestChip}
-              onPress={() => onNavigate('interest_select')}
-            >
-              <Ionicons name="add" size={14} color={COLORS.primary} />
-              <Text style={styles.addInterestText}>Sửa</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Menu Items */}
+        {/* Quick Menu Settings */}
         <View style={styles.menuCard}>
           <TouchableOpacity
             style={styles.menuItem}
@@ -257,7 +474,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
             onPress={() => onNavigate('city_select')}
           >
             <Ionicons name="map-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.menuTitle}>Đổi thành phố ({selectedCity})</Text>
+            <Text style={styles.menuTitle}>Đổi tỉnh thành ({selectedCity})</Text>
             <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
           </TouchableOpacity>
 
@@ -271,8 +488,104 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Trust Score Breakdown Modal / Bottom Sheet */}
+      <Modal visible={showTrustAuditModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalSheetHeader}>
+              <View>
+                <Text style={styles.modalSheetTitle}>Bảng Kê Điểm Uy Tín Minh Bạch</Text>
+                <Text style={styles.modalSheetSubtitle}>Hệ thống AI tự động chấm điểm thời gian thực</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowTrustAuditModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textDark} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.totalScoreBanner}>
+              <LinearGradient
+                colors={['#00F2FE', '#4FACFE']}
+                style={styles.totalScoreGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.totalScoreNum}>{trustScore}</Text>
+                <View style={{ marginLeft: 12 }}>
+                  <Text style={styles.totalScoreTier}>Hạng Cạ Vàng Xuất Sắc</Text>
+                  <Text style={styles.totalScoreDesc}>Được ưu tiên ghép nhóm và hiển thị đầu Feed</Text>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }}>
+              <View style={styles.auditItem}>
+                <View style={styles.auditIconDone}>
+                  <Ionicons name="checkmark" size={16} color="#059669" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.auditItemName}>Xác thực SĐT qua SMS OTP thật</Text>
+                  <Text style={styles.auditItemDesc}>Ngăn chặn tài khoản clone / ảo</Text>
+                </View>
+                <Text style={styles.auditScorePlus}>+20đ</Text>
+              </View>
+
+              <View style={styles.auditItem}>
+                <View style={styles.auditIconDone}>
+                  <Ionicons name="checkmark" size={16} color="#059669" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.auditItemName}>Check-in GPS tọa độ thật</Text>
+                  <Text style={styles.auditItemDesc}>Khớp tọa độ vệ tinh tại Sơn Trà</Text>
+                </View>
+                <Text style={styles.auditScorePlus}>+30đ</Text>
+              </View>
+
+              <View style={styles.auditItem}>
+                <View style={styles.auditIconDone}>
+                  <Ionicons name="checkmark" size={16} color="#059669" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.auditItemName}>Đánh giá 5 sao từ cạ cứng sau chuyến đi</Text>
+                  <Text style={styles.auditItemDesc}>2 cạ xác nhận đúng giờ và nhiệt tình</Text>
+                </View>
+                <Text style={styles.auditScorePlus}>+10đ</Text>
+              </View>
+
+              <View style={styles.auditItem}>
+                <View style={styles.auditIconDone}>
+                  <Ionicons name="checkmark" size={16} color="#059669" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.auditItemName}>Hoàn thành onboarding & chia sẻ sở thích</Text>
+                  <Text style={styles.auditItemDesc}>Thiết lập hồ sơ đầy đủ</Text>
+                </View>
+                <Text style={styles.auditScorePlus}>+15đ</Text>
+              </View>
+
+              <View style={styles.auditItem}>
+                <View style={styles.auditIconDone}>
+                  <Ionicons name="checkmark" size={16} color="#059669" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.auditItemName}>Hành vi văn minh, 0 báo cáo vi phạm</Text>
+                  <Text style={styles.auditItemDesc}>Tuân thủ quy tắc cộng đồng VIVU</Text>
+                </View>
+                <Text style={styles.auditScorePlus}>+19đ</Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => setShowTrustAuditModal(false)}
+            >
+              <Text style={styles.modalCloseBtnText}>Đã hiểu</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Bottom Tab Bar */}
       <BottomTabBar currentScreen="profile" onNavigate={onNavigate} />
@@ -285,242 +598,361 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FE',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.textDark,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   scroll: {
     flex: 1,
   },
-  userCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    alignItems: 'center',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    ...SHADOWS.sm,
+  coverWrapper: {
+    position: 'relative',
+    height: 190,
+    width: '100%',
   },
-  avatar: {
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverGradient: {
+    ...StyleSheet.absoluteFill,
+  },
+  coverTopActions: {
+    position: 'absolute',
+    top: 36,
+    right: 16,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  iconCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  changeCoverBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  changeCoverText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  profileCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: -45,
+    borderRadius: 24,
+    alignItems: 'center',
+    paddingTop: 0,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    ...SHADOWS.md,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginTop: -45,
+    marginBottom: 10,
+  },
+  auraGlow: {
+    padding: 4,
+    borderRadius: 50,
+    ...SHADOWS.glow,
+  },
+  avatarImage: {
     width: 86,
     height: 86,
     borderRadius: 43,
     borderWidth: 3,
-    borderColor: COLORS.primarySoft,
-    marginBottom: 10,
+    borderColor: '#FFFFFF',
+  },
+  verifiedFloatingBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
   },
   userName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: COLORS.textDark,
   },
-  cityBadge: {
+  verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     marginTop: 4,
+    marginBottom: 6,
   },
-  cityText: {
-    fontSize: 13,
-    color: COLORS.textMedium,
-    fontWeight: '600',
-  },
-  socialStyleText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  activeTag: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  activeTagText: {
-    fontSize: 12,
+  verifiedText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#D97706',
+    color: '#059669',
   },
-  statsRow: {
+  userBio: {
+    fontSize: 12,
+    color: COLORS.textMedium,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  trustScorePill: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    width: '100%',
+    ...SHADOWS.sm,
+  },
+  trustGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  trustScorePillText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  auditHelpTag: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  auditHelpText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  statsBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     width: '100%',
-    marginTop: 20,
-    paddingTop: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderBottomWidth: 1,
+    borderColor: '#F3F4F6',
+    marginBottom: 12,
   },
   statCol: {
     alignItems: 'center',
   },
   statNum: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: COLORS.textDark,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textLight,
     marginTop: 2,
   },
   statDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#EEEEF2',
+    backgroundColor: '#E5E7EB',
   },
-  trustScoreCard: {
-    backgroundColor: '#FFFFFF',
-    margin: 16,
-    borderRadius: 20,
-    padding: 18,
-    ...SHADOWS.sm,
-  },
-  trustScoreHeader: {
+  badgesScroll: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  trustTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.textDark,
-  },
-  trustSub: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 2,
-  },
-  scoreCircle: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.md,
-  },
-  scoreCircleNum: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    lineHeight: 22,
-  },
-  scoreCircleMax: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.85)',
-    fontWeight: '600',
-  },
-  breakdownList: {
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 14,
-  },
-  breakdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  itemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
+    paddingVertical: 4,
   },
-  breakdownLabel: {
-    fontSize: 13,
-    color: COLORS.textMedium,
-  },
-  breakdownScore: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textDark,
-  },
-  trustDetailBtn: {
-    marginTop: 14,
+  badgeChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
+    borderRadius: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  trustDetailText: {
-    fontSize: 12,
+  badgeTitle: {
+    fontSize: 11,
     fontWeight: '700',
-    color: COLORS.primaryDark,
   },
-  engineCard: {
-    backgroundColor: '#ECFDF5',
+  tabBarWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    gap: 12,
+    marginTop: 14,
+    borderRadius: 16,
+    padding: 4,
     ...SHADOWS.sm,
   },
-  engineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  engineTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#065F46',
-  },
-  engineSub: {
-    fontSize: 11,
-    color: '#047857',
-    marginTop: 2,
-  },
-  runCrawlerBtn: {
-    backgroundColor: '#059669',
+  tabItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 14,
-    gap: 8,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  runCrawlerText: {
-    color: '#FFFFFF',
+  tabItemActive: {
+    backgroundColor: '#EEF2FF',
+  },
+  tabItemText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textLight,
+  },
+  tabItemTextActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  mediaGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: 16,
+    marginTop: 14,
+  },
+  gridThumbWrap: {
+    width: '32%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  gridThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridVideoBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  gridVideoDuration: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  tripsListContainer: {
+    paddingHorizontal: 16,
+    marginTop: 14,
+    gap: 12,
+  },
+  tripCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 10,
+    ...SHADOWS.sm,
+  },
+  tripCardImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+  },
+  tripCardContent: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  tripStatusTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  tripStatusText: {
+    fontSize: 10,
+    color: '#059669',
+    fontWeight: '700',
+  },
+  tripTitle: {
     fontSize: 13,
     fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  tripMeta: {
+    fontSize: 11,
+    color: COLORS.textMedium,
+    marginTop: 2,
+  },
+  tripCompanions: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  reviewsListContainer: {
+    paddingHorizontal: 16,
+    marginTop: 14,
+    gap: 12,
+  },
+  reviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    ...SHADOWS.sm,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  reviewAuthor: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  reviewDate: {
+    fontSize: 10,
+    color: COLORS.textLight,
+  },
+  reviewRating: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  reviewComment: {
+    fontSize: 12,
+    color: COLORS.textMedium,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
     borderRadius: 20,
-    padding: 18,
+    padding: 16,
     ...SHADOWS.sm,
   },
   sectionHeading: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: COLORS.textDark,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   interestWrap: {
     flexDirection: 'row',
@@ -530,52 +962,186 @@ const styles = StyleSheet.create({
   interestChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 6,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
   },
   interestText: {
     fontSize: 12,
+    color: COLORS.primary,
     fontWeight: '600',
-    color: COLORS.textDark,
   },
   addInterestChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primarySoft,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
   },
   addInterestText: {
     fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  engineCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 20,
+    padding: 16,
+    ...SHADOWS.sm,
+  },
+  engineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  engineTitle: {
+    fontSize: 14,
     fontWeight: '700',
-    color: COLORS.primaryDark,
+    color: COLORS.textDark,
+  },
+  engineSub: {
+    fontSize: 11,
+    color: COLORS.textMedium,
+    marginTop: 2,
+  },
+  runCrawlerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  runCrawlerText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   menuCard: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
     borderRadius: 20,
-    padding: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     ...SHADOWS.sm,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
-    paddingHorizontal: 12,
-    gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
+    borderBottomColor: '#F3F4F6',
   },
   menuTitle: {
-    fontSize: 14,
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.textDark,
+  },
+  modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalSheetTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  modalSheetSubtitle: {
+    fontSize: 11,
+    color: COLORS.textMedium,
+    marginTop: 2,
+  },
+  totalScoreBanner: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  totalScoreGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  totalScoreNum: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  totalScoreTier: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  totalScoreDesc: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+  auditItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  auditIconDone: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  auditItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  auditItemDesc: {
+    fontSize: 11,
+    color: COLORS.textLight,
+  },
+  auditScorePlus: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  modalCloseBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  modalCloseBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
