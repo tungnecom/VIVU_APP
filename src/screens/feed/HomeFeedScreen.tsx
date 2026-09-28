@@ -30,11 +30,13 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
 }) => {
   const [showViVi, setShowViVi] = useState(false);
   const posts = useFeedStore((state) => state.posts);
-  const likedPostIds = useFeedStore((state) => state.likedPostIds);
+  const likedPostIds = useFeedStore((state) => state.likedPostIds) || {};
+  const likedPosts = useFeedStore((state) => state.likedPosts) || likedPostIds;
   const toggleLike = useFeedStore((state) => state.toggleLike);
   const activeCategory = useFeedStore((state) => state.activeCategory);
   const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
   const fetchPosts = useFeedStore((state) => state.fetchPosts);
+
 
   useEffect(() => {
     fetchPosts(activeCategory);

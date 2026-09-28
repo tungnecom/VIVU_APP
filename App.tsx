@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Platform,
-  SafeAreaView,
   StatusBar as RNStatusBar,
   StyleSheet,
   Text,
@@ -10,7 +9,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+
 
 import { ScreenNavigatorModal } from './src/components/ScreenNavigatorModal';
 import { ViViMascotModal } from './src/components/ViViMascotModal';

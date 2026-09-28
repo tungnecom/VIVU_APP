@@ -6,6 +6,7 @@ import { PostItem } from '../types';
 interface FeedState {
   posts: PostItem[];
   likedPostIds: Record<string, boolean>;
+  likedPosts: Record<string, boolean>;
   activeCategory: string;
   loading: boolean;
 
@@ -17,9 +18,12 @@ interface FeedState {
   addComment: (postId: string) => void;
 }
 
+const initialLiked = { p2: true };
+
 export const useFeedStore = create<FeedState>((set, get) => ({
   posts: MOCK_POSTS,
-  likedPostIds: { p2: true },
+  likedPostIds: initialLiked,
+  likedPosts: initialLiked,
   activeCategory: 'Ăn uống',
   loading: false,
 
@@ -44,7 +48,7 @@ export const useFeedStore = create<FeedState>((set, get) => ({
 
   toggleLike: (postId) =>
     set((state) => {
-      const isLiked = !!state.likedPostIds[postId];
+      const isLiked = !!(state.likedPostIds?.[postId] ?? state.likedPosts?.[postId]);
       const updatedPosts = state.posts.map((p) => {
         if (p.id === postId) {
           return {
@@ -56,12 +60,16 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         return p;
       });
 
+      const updatedLiked = {
+        ...state.likedPostIds,
+        ...state.likedPosts,
+        [postId]: !isLiked,
+      };
+
       return {
         posts: updatedPosts,
-        likedPostIds: {
-          ...state.likedPostIds,
-          [postId]: !isLiked,
-        },
+        likedPostIds: updatedLiked,
+        likedPosts: updatedLiked,
       };
     }),
 
