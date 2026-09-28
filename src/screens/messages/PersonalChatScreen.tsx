@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -12,8 +13,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { Header } from '../../components/Header';
-import { COLORS } from '../../constants/theme';
+import { COLORS, SHADOWS } from '../../constants/theme';
 import { ApiClient } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,17 +27,38 @@ interface PersonalChatProps {
   onNavigate: (screen: ScreenKey) => void;
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   id: string;
-  text: string;
+  text?: string;
   time: string;
   isMe: boolean;
+  type?: 'text' | 'voice' | 'image' | 'location';
+  audioUri?: string;
+  duration?: number;
+  imageUrl?: string;
+  locationName?: string;
+  latitude?: number;
+  longitude?: number;
+  reaction?: string;
+  replyTo?: { text: string; sender: string };
+  isRead?: boolean;
 }
 
 export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) => {
   const [inputText, setInputText] = useState('');
   const [loadingIcebreaker, setLoadingIcebreaker] = useState(false);
   const [isTypingPeer, setIsTypingPeer] = useState(false);
+  const [replyingMessage, setReplyingMessage] = useState<ChatMessage | null>(null);
+  const [selectedMsgForReaction, setSelectedMsgForReaction] = useState<string | null>(null);
+
+  // Voice recording & playback states
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const recordTimerRef = useRef<any>(null);
+
   const [smartReplies, setSmartReplies] = useState<string[]>([
     'Nhất trí nhé! Chiều thứ 7 17h mình có mặt tại điểm hẹn.',
     'Để mình rủ thêm bạn cùng đi cho vui nha! ✨',
@@ -47,21 +72,44 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      text: 'Cuối tuần bạn có rảnh không?',
+      text: 'Cuối tuần bạn có rảnh đi cafe ngắm biển Mỹ Khê không?',
       time: '12:28',
       isMe: false,
+      isRead: true,
+      reaction: '❤️',
     },
     {
       id: '2',
-      text: 'Mình đang định đi nè 😊 Bạn có kế hoạch gì chưa?',
+      text: 'Mình đang định đi nè 😊 Bạn có địa điểm nào chill chưa?',
       time: '12:29',
       isMe: true,
+      isRead: true,
     },
     {
       id: '3',
-      text: 'Bạn có thể hỏi mọi người trong nhóm food tour thử xem! Chiều thứ 7 tụi mình gặp nhau nhé.',
+      text: 'Ghé Sơn Trà Marina view Santorini nhé! Mình gửi ghim vị trí cho bạn.',
       time: '12:30',
       isMe: false,
+      isRead: true,
+    },
+    {
+      id: '4',
+      time: '12:30',
+      isMe: false,
+      type: 'location',
+      locationName: 'Sơn Trà Marina Cafe • Thọ Quang, Sơn Trà',
+      latitude: 16.1154,
+      longitude: 108.2741,
+      isRead: true,
+    },
+    {
+      id: '5',
+      time: '12:31',
+      isMe: false,
+      type: 'voice',
+      duration: 8,
+      audioUri: 'https://example.com/audio.m4a',
+      isRead: true,
     },
   ]);
 
@@ -84,14 +132,14 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
             text: incoming.text,
             time: incoming.time || 'Vừa xong',
             isMe: false,
+            isRead: true,
           },
         ]);
-        // Tự động sinh gợi ý trả lời ngữ cảnh mới
         loadSmartReplies(incoming.text);
       }
     });
 
-    socketService.onTyping(({ userName, isTyping }) => {
+    socketService.onTyping(({ isTyping }) => {
       setIsTypingPeer(isTyping);
     });
 
@@ -99,6 +147,12 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
       socketService.offReceiveMessage();
       socketService.offTyping();
       socketService.leaveRoom(ROOM_ID);
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+      if (recordTimerRef.current) {
+        clearInterval(recordTimerRef.current);
+      }
     };
   }, []);
 
@@ -108,11 +162,10 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
       if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
         setSmartReplies(res.data);
       }
-    } catch {
-      // Giữ gợi ý mặc định
-    }
+    } catch {}
   };
 
+  // 1. Gửi tin nhắn văn bản
   const handleSendText = (textToSend: string) => {
     if (!textToSend.trim()) return;
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -121,13 +174,20 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
       text: textToSend.trim(),
       time: nowTime,
       isMe: true,
+      type: 'text',
+      isRead: true,
+      replyTo: replyingMessage
+        ? {
+            text: replyingMessage.text || 'Tin nhắn phương tiện',
+            sender: replyingMessage.isMe ? 'Bạn' : 'Minh Thư',
+          }
+        : undefined,
     };
 
     setMessages((prev) => [...prev, newMsg]);
     socketService.sendMessage(ROOM_ID, user?.id || 'u_me', user?.name || 'Bạn', textToSend.trim());
     setInputText('');
-
-    // Sau khi gửi, ViVi cập nhật gợi ý tiếp theo
+    setReplyingMessage(null);
     loadSmartReplies(textToSend);
 
     setTimeout(() => {
@@ -135,6 +195,152 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
     }, 100);
   };
 
+  // 2. Thu âm tin nhắn thoại (Voice Audio)
+  const startRecording = async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Quyền microphone', 'Cần cấp quyền microphone để thu âm tin nhắn thoại.');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(newRecording);
+      setIsRecording(true);
+      setRecordDuration(0);
+
+      recordTimerRef.current = setInterval(() => {
+        setRecordDuration((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    try {
+      clearInterval(recordTimerRef.current);
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const voiceMsg: ChatMessage = {
+          id: 'voice_' + Date.now(),
+          time: nowTime,
+          isMe: true,
+          type: 'voice',
+          audioUri: uri,
+          duration: Math.max(recordDuration, 1),
+          isRead: true,
+        };
+        setMessages((prev) => [...prev, voiceMsg]);
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    } catch {
+      setIsRecording(false);
+    }
+  };
+
+  // 3. Phát lại tin nhắn thoại
+  const playVoiceMessage = async (msgId: string, uri?: string) => {
+    try {
+      if (playingAudioId === msgId) {
+        if (soundRef.current) {
+          await soundRef.current.stopAsync();
+          setPlayingAudioId(null);
+        }
+        return;
+      }
+
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: uri || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+        { shouldPlay: true }
+      );
+      soundRef.current = sound;
+      setPlayingAudioId(msgId);
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setPlayingAudioId(null);
+        }
+      });
+    } catch {
+      setPlayingAudioId(null);
+    }
+  };
+
+  // 4. Chọn ảnh từ thư viện
+  const handlePickImage = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+
+    if (!res.canceled && res.assets && res.assets.length > 0) {
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const imgMsg: ChatMessage = {
+        id: 'img_' + Date.now(),
+        time: nowTime,
+        isMe: true,
+        type: 'image',
+        imageUrl: res.assets[0].uri,
+        isRead: true,
+      };
+      setMessages((prev) => [...prev, imgMsg]);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  };
+
+  // 5. Chia sẻ vị trí GPS thời gian thực
+  const handleShareLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      let coords = { latitude: 16.0544, longitude: 108.2022 };
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      }
+
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const locMsg: ChatMessage = {
+        id: 'loc_' + Date.now(),
+        time: nowTime,
+        isMe: true,
+        type: 'location',
+        locationName: `Vị trí trực tiếp của tôi • ${selectedCity}`,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        isRead: true,
+      };
+      setMessages((prev) => [...prev, locMsg]);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch {}
+  };
+
+  // 6. Thả cảm xúc Emoji Reaction
+  const handleReactToMessage = (msgId: string, emoji: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, reaction: m.reaction === emoji ? undefined : emoji } : m))
+    );
+    setSelectedMsgForReaction(null);
+  };
+
+  // 7. Sinh câu mở lời AI
   const handleGenerateIcebreaker = async () => {
     setLoadingIcebreaker(true);
     try {
@@ -158,7 +364,7 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
     >
       <Header
         title="Minh Thư"
-        subtitle={isTypingPeer ? 'Đang soạn tin nhắn...' : 'Đang hoạt động • Điểm uy tín: 94'}
+        subtitle={isTypingPeer ? 'Đang soạn tin nhắn...' : '🟢 Đang hoạt động • 96đ uy tín'}
         onBack={() => onNavigate('message_home')}
         rightIcon="call-outline"
         onRightPress={() => onNavigate('profile')}
@@ -179,7 +385,10 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
             style={styles.peerCardAvatar}
           />
           <View style={{ flex: 1 }}>
-            <Text style={styles.peerCardName}>Minh Thư</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.peerCardName}>Minh Thư</Text>
+              <Ionicons name="checkmark-circle" size={14} color="#3B82F6" style={{ marginLeft: 4 }} />
+            </View>
             <Text style={styles.peerCardDesc}>
               Đam mê ẩm thực & săn ảnh hoàng hôn • {selectedCity}
             </Text>
@@ -200,47 +409,153 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
           </TouchableOpacity>
         </View>
 
-        {messages.map((m) => (
-          <View
-            key={m.id}
-            style={[
-              styles.msgRow,
-              m.isMe ? styles.msgRowMe : styles.msgRowOther,
-            ]}
-          >
-            {!m.isMe && (
-              <Image
-                source={{
-                  uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-                }}
-                style={styles.avatar}
-              />
-            )}
-            <View
-              style={[
-                styles.bubble,
-                m.isMe ? styles.bubbleMe : styles.bubbleOther,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.msgText,
-                  m.isMe ? styles.msgTextMe : styles.msgTextOther,
-                ]}
-              >
-                {m.text}
-              </Text>
-              <Text
-                style={[
-                  styles.timeText,
-                  m.isMe ? styles.timeTextMe : styles.timeTextOther,
-                ]}
-              >
-                {m.time}
-              </Text>
+        {/* Message List */}
+        {messages.map((m) => {
+          const isSelected = selectedMsgForReaction === m.id;
+          return (
+            <View key={m.id} style={{ position: 'relative', marginBottom: 6 }}>
+              {/* Emoji Reaction Popover */}
+              {isSelected && (
+                <View style={[styles.reactionPopover, m.isMe ? { right: 10 } : { left: 40 }]}>
+                  {['❤️', '😂', '😮', '😢', '👍', '🔥'].map((emoji) => (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={styles.emojiTouch}
+                      onPress={() => handleReactToMessage(m.id, emoji)}
+                    >
+                      <Text style={styles.emojiText}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    style={styles.replyActionTouch}
+                    onPress={() => {
+                      setReplyingMessage(m);
+                      setSelectedMsgForReaction(null);
+                    }}
+                  >
+                    <Ionicons name="arrow-undo" size={15} color={COLORS.textMedium} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={[styles.msgRow, m.isMe ? styles.msgRowMe : styles.msgRowOther]}>
+                {!m.isMe && (
+                  <Image
+                    source={{
+                      uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+                    }}
+                    style={styles.avatar}
+                  />
+                )}
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onLongPress={() => setSelectedMsgForReaction(isSelected ? null : m.id)}
+                  style={[styles.bubble, m.isMe ? styles.bubbleMe : styles.bubbleOther]}
+                >
+                  {/* Trích dẫn tin nhắn (Reply Quote) */}
+                  {m.replyTo && (
+                    <View style={styles.quoteBox}>
+                      <Text style={styles.quoteSender}>{m.replyTo.sender}</Text>
+                      <Text style={styles.quoteText} numberOfLines={1}>
+                        {m.replyTo.text}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* 1. Tin nhắn Text */}
+                  {(!m.type || m.type === 'text') && (
+                    <Text style={[styles.msgText, m.isMe ? styles.msgTextMe : styles.msgTextOther]}>
+                      {m.text}
+                    </Text>
+                  )}
+
+                  {/* 2. Tin nhắn Thoại (Voice Audio Bubble) */}
+                  {m.type === 'voice' && (
+                    <View style={styles.voiceBubbleRow}>
+                      <TouchableOpacity
+                        style={styles.playVoiceBtn}
+                        onPress={() => playVoiceMessage(m.id, m.audioUri)}
+                      >
+                        <Ionicons
+                          name={playingAudioId === m.id ? 'pause' : 'play'}
+                          size={18}
+                          color={m.isMe ? '#FFFFFF' : COLORS.primary}
+                        />
+                      </TouchableOpacity>
+
+                      <View style={styles.voiceWaveWrap}>
+                        <View style={styles.waveBarsRow}>
+                          {[12, 22, 16, 26, 18, 14, 24, 20, 16, 22, 14].map((h, hIdx) => (
+                            <View
+                              key={hIdx}
+                              style={[
+                                styles.waveBar,
+                                {
+                                  height: h,
+                                  backgroundColor: m.isMe ? 'rgba(255,255,255,0.7)' : COLORS.primary,
+                                },
+                              ]}
+                            />
+                          ))}
+                        </View>
+                        <Text style={[styles.voiceDuration, m.isMe ? styles.timeTextMe : styles.timeTextOther]}>
+                          0:{m.duration && m.duration < 10 ? `0${m.duration}` : m.duration || '08'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* 3. Tin nhắn Ảnh (Image Bubble) */}
+                  {m.type === 'image' && m.imageUrl && (
+                    <Image source={{ uri: m.imageUrl }} style={styles.msgImageThumb} resizeMode="cover" />
+                  )}
+
+                  {/* 4. Tin nhắn Ghim vị trí (Location Pin Bubble) */}
+                  {m.type === 'location' && (
+                    <TouchableOpacity
+                      style={styles.locationPinBubble}
+                      onPress={() => onNavigate('map')}
+                    >
+                      <View style={styles.pinIconCircle}>
+                        <Ionicons name="location" size={18} color="#EF4444" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.locationPinTitle}>Ghim địa điểm</Text>
+                        <Text style={styles.locationPinDesc} numberOfLines={1}>
+                          {m.locationName}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Message Meta: Time & Delivery Status (2 tick xanh) */}
+                  <View style={styles.msgMetaRow}>
+                    <Text style={[styles.timeText, m.isMe ? styles.timeTextMe : styles.timeTextOther]}>
+                      {m.time}
+                    </Text>
+                    {m.isMe && (
+                      <Ionicons
+                        name="checkmark-done"
+                        size={14}
+                        color={m.isRead ? '#38BDF8' : '#94A3B8'}
+                        style={{ marginLeft: 3 }}
+                      />
+                    )}
+                  </View>
+
+                  {/* Reaction badge */}
+                  {m.reaction && (
+                    <View style={styles.reactionBadge}>
+                      <Text style={styles.reactionBadgeText}>{m.reaction}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
 
         {isTypingPeer && (
           <View style={[styles.msgRow, styles.msgRowOther]}>
@@ -251,16 +566,16 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
               style={styles.avatar}
             />
             <View style={[styles.bubble, styles.bubbleOther, styles.typingBubble]}>
-              <Text style={styles.typingText}>Minh Thư đang gõ...</Text>
+              <Text style={styles.typingText}>Minh Thư đang soạn tin...</Text>
             </View>
           </View>
         )}
 
-        {/* ViVi Smart Contextual Suggestions Section */}
+        {/* ViVi Smart Suggestions */}
         <View style={styles.smartSection}>
           <View style={styles.smartHeader}>
             <Ionicons name="sparkles" size={15} color={COLORS.primary} />
-            <Text style={styles.smartTitle}>ViVi AI: Gợi ý trả lời ngữ cảnh</Text>
+            <Text style={styles.smartTitle}>ViVi AI: Gợi ý phản hồi thông minh</Text>
           </View>
           <View style={styles.chipsRow}>
             {smartReplies.map((reply, idx) => (
@@ -278,30 +593,70 @@ export const PersonalChatScreen: React.FC<PersonalChatProps> = ({ onNavigate }) 
         </View>
       </ScrollView>
 
+      {/* Quote Preview Bar */}
+      {replyingMessage && (
+        <View style={styles.replyBar}>
+          <View style={styles.replyBarLeft}>
+            <Ionicons name="arrow-undo" size={14} color={COLORS.primary} />
+            <Text style={styles.replyBarSender}>
+              Trả lời {replyingMessage.isMe ? 'chính bạn' : 'Minh Thư'}
+            </Text>
+          </View>
+          <Text style={styles.replyBarText} numberOfLines={1}>
+            {replyingMessage.text || 'Nội dung đa phương tiện'}
+          </Text>
+          <TouchableOpacity onPress={() => setReplyingMessage(null)}>
+            <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Recording in progress banner */}
+      {isRecording && (
+        <View style={styles.recordingBanner}>
+          <View style={styles.recordingPulse} />
+          <Text style={styles.recordingText}>
+            Đang ghi âm giọng nói: 0:{recordDuration < 10 ? `0${recordDuration}` : recordDuration}
+          </Text>
+          <TouchableOpacity style={styles.stopRecBtn} onPress={stopRecording}>
+            <Text style={styles.stopRecText}>Gửi ngay</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Input Bar */}
       <View style={styles.inputBar}>
-        <TouchableOpacity style={styles.mediaBtn}>
-          <Ionicons name="camera-outline" size={22} color={COLORS.textMedium} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mediaBtn}>
+        <TouchableOpacity style={styles.mediaBtn} onPress={handlePickImage}>
           <Ionicons name="image-outline" size={22} color={COLORS.textMedium} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.mediaBtn} onPress={handleShareLocation}>
+          <Ionicons name="location-outline" size={22} color={COLORS.textMedium} />
         </TouchableOpacity>
 
         <TextInput
           style={styles.input}
-          placeholder="Nhập tin nhắn..."
+          placeholder={isRecording ? 'Đang ghi âm...' : 'Nhập tin nhắn...'}
           placeholderTextColor={COLORS.textLight}
           value={inputText}
           onChangeText={setInputText}
+          editable={!isRecording}
           onSubmitEditing={() => handleSendText(inputText)}
         />
 
-        <TouchableOpacity
-          style={styles.sendBtn}
-          onPress={() => handleSendText(inputText)}
-        >
-          <Ionicons name="send" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
+        {/* Nút Mic hoặc Gửi */}
+        {inputText.trim().length > 0 ? (
+          <TouchableOpacity style={styles.sendBtn} onPress={() => handleSendText(inputText)}>
+            <Ionicons name="send" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.micBtn, isRecording && styles.micBtnRecording]}
+            onPress={isRecording ? stopRecording : startRecording}
+          >
+            <Ionicons name={isRecording ? 'stop' : 'mic'} size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -378,10 +733,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   bubble: {
-    maxWidth: '75%',
+    maxWidth: '78%',
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    position: 'relative',
   },
   bubbleOther: {
     backgroundColor: '#FFFFFF',
@@ -390,7 +746,7 @@ const styles = StyleSheet.create({
     borderColor: '#EEEEF2',
   },
   bubbleMe: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primaryDark,
     borderBottomRightRadius: 4,
   },
   typingBubble: {
@@ -412,10 +768,14 @@ const styles = StyleSheet.create({
   msgTextMe: {
     color: '#FFFFFF',
   },
+  msgMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+  },
   timeText: {
     fontSize: 10,
-    marginTop: 4,
-    alignSelf: 'flex-end',
   },
   timeTextOther: {
     color: COLORS.textLight,
@@ -423,19 +783,150 @@ const styles = StyleSheet.create({
   timeTextMe: {
     color: 'rgba(255,255,255,0.7)',
   },
+  // Voice Bubble
+  voiceBubbleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 160,
+  },
+  playVoiceBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceWaveWrap: {
+    flex: 1,
+  },
+  waveBarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 30,
+  },
+  waveBar: {
+    width: 3,
+    borderRadius: 2,
+  },
+  voiceDuration: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  // Image Bubble
+  msgImageThumb: {
+    width: 200,
+    height: 140,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  // Location Pin Bubble
+  locationPinBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF1F2',
+    padding: 10,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  pinIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationPinTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  locationPinDesc: {
+    fontSize: 11,
+    color: '#BE123C',
+    marginTop: 2,
+  },
+  // Quote Box
+  quoteBox: {
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginBottom: 6,
+  },
+  quoteSender: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  quoteText: {
+    fontSize: 11,
+    color: COLORS.textDark,
+  },
+  // Reaction
+  reactionBadge: {
+    position: 'absolute',
+    bottom: -8,
+    right: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    ...SHADOWS.sm,
+  },
+  reactionBadgeText: {
+    fontSize: 11,
+  },
+  reactionPopover: {
+    position: 'absolute',
+    top: -36,
+    zIndex: 99,
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 6,
+    alignItems: 'center',
+    ...SHADOWS.md,
+  },
+  emojiTouch: {
+    padding: 4,
+  },
+  emojiText: {
+    fontSize: 16,
+  },
+  replyActionTouch: {
+    padding: 4,
+    borderLeftWidth: 1,
+    borderLeftColor: '#E5E7EB',
+    marginLeft: 4,
+  },
+  // ViVi Suggestions
   smartSection: {
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#E9D5FF',
     marginTop: 8,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: '#EEEEF2',
   },
   smartHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 8,
   },
   smartTitle: {
     fontSize: 12,
@@ -446,46 +937,117 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   replyChip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
     borderRadius: 12,
-    paddingVertical: 8,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#DDD6FE',
+    paddingVertical: 8,
   },
   replyChipText: {
     fontSize: 12,
-    color: COLORS.primaryDark,
+    color: COLORS.textDark,
     lineHeight: 16,
-    fontWeight: '500',
   },
+  // Reply Bar
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#BFDBFE',
+    gap: 8,
+  },
+  replyBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  replyBarSender: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  replyBarText: {
+    flex: 1,
+    fontSize: 11,
+    color: COLORS.textMedium,
+  },
+  // Recording Banner
+  recordingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#FECDD3',
+    gap: 8,
+  },
+  recordingPulse: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+  },
+  recordingText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  stopRecBtn: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  stopRecText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  // Input Bar
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: '#EEEEF2',
     gap: 8,
   },
   mediaBtn: {
-    padding: 4,
+    padding: 6,
   },
   input: {
     flex: 1,
-    height: 42,
     backgroundColor: '#F3F4F6',
-    borderRadius: 21,
-    paddingHorizontal: 16,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     fontSize: 14,
     color: COLORS.textDark,
+    maxHeight: 100,
   },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  micBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micBtnRecording: {
+    backgroundColor: '#EF4444',
   },
 });

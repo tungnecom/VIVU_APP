@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { Header } from '../../components/Header';
 import { COLORS } from '../../constants/theme';
 import { ApiClient } from '../../services/api';
@@ -26,10 +28,12 @@ interface GroupMessage {
   id: string;
   sender: string;
   avatar: string;
-  text: string;
+  text?: string;
   time: string;
   isMe: boolean;
   isBot?: boolean;
+  imageUrl?: string;
+  locationName?: string;
 }
 
 export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
@@ -145,6 +149,49 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
     }
   };
 
+  const handlePickImage = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+    });
+
+    if (!res.canceled && res.assets && res.assets.length > 0) {
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const imgMsg: GroupMessage = {
+        id: 'group_img_' + Date.now(),
+        sender: `${user?.name || 'Tùng'} (Bạn)`,
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        imageUrl: res.assets[0].uri,
+        time: nowTime,
+        isMe: true,
+      };
+      setMessages((prev) => [...prev, imgMsg]);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  };
+
+  const handleShareLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      let coordsName = `Điểm hẹn nhóm • ${selectedCity}`;
+      if (status === 'granted') {
+        coordsName = `Vị trí trực tiếp của tôi • ${selectedCity}`;
+      }
+
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const locMsg: GroupMessage = {
+        id: 'group_loc_' + Date.now(),
+        sender: `${user?.name || 'Tùng'} (Bạn)`,
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        locationName: coordsName,
+        time: nowTime,
+        isMe: true,
+      };
+      setMessages((prev) => [...prev, locMsg]);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch {}
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -194,18 +241,39 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
                   {m.sender}
                 </Text>
               )}
-              <Text
-                style={[
-                  styles.msgText,
-                  m.isMe
-                    ? styles.msgTextMe
-                    : m.isBot
-                    ? styles.msgTextBot
-                    : styles.msgTextOther,
-                ]}
-              >
-                {m.text}
-              </Text>
+
+              {/* Text message */}
+              {m.text && (
+                <Text
+                  style={[
+                    styles.msgText,
+                    m.isMe
+                      ? styles.msgTextMe
+                      : m.isBot
+                      ? styles.msgTextBot
+                      : styles.msgTextOther,
+                  ]}
+                >
+                  {m.text}
+                </Text>
+              )}
+
+              {/* Image message */}
+              {m.imageUrl && (
+                <Image source={{ uri: m.imageUrl }} style={styles.groupImageThumb} resizeMode="cover" />
+              )}
+
+              {/* Location pin message */}
+              {m.locationName && (
+                <TouchableOpacity
+                  style={styles.locationPinCard}
+                  onPress={() => onNavigate('map')}
+                >
+                  <Ionicons name="location" size={16} color="#EF4444" />
+                  <Text style={styles.locationPinText} numberOfLines={1}>{m.locationName}</Text>
+                </TouchableOpacity>
+              )}
+
               <Text
                 style={[
                   styles.timeText,
@@ -232,11 +300,11 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
 
       {/* Input Bar */}
       <View style={styles.inputBar}>
-        <TouchableOpacity style={styles.mediaBtn}>
-          <Ionicons name="camera-outline" size={22} color={COLORS.textMedium} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mediaBtn}>
+        <TouchableOpacity style={styles.mediaBtn} onPress={handlePickImage}>
           <Ionicons name="image-outline" size={22} color={COLORS.textMedium} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.mediaBtn} onPress={handleShareLocation}>
+          <Ionicons name="location-outline" size={22} color={COLORS.textMedium} />
         </TouchableOpacity>
 
         <TextInput
@@ -336,6 +404,27 @@ const styles = StyleSheet.create({
   },
   timeTextMe: {
     color: 'rgba(255,255,255,0.7)',
+  },
+  groupImageThumb: {
+    width: 200,
+    height: 130,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  locationPinCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+    marginBottom: 4,
+  },
+  locationPinText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   askViViPill: {
     flexDirection: 'row',
