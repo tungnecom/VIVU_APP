@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface PrivacySettingProps {
@@ -18,15 +19,16 @@ interface PrivacySettingProps {
 }
 
 export const PrivacySettingScreen: React.FC<PrivacySettingProps> = ({ onNavigate }) => {
-  const [settings, setSettings] = useState({
-    location: true,
-    profile: true,
-    messages: true,
-    notifications: false,
-  });
+  const privacySettings = useAuthStore((state) => state.privacySettings);
+  const setPrivacySettings = useAuthStore((state) => state.setPrivacySettings);
+  const completeOnboarding = useAuthStore((state) => state.completeOnboarding);
+
+  const [settings, setSettings] = useState(privacySettings);
 
   const toggle = (key: keyof typeof settings) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+    const updated = { ...settings, [key]: !settings[key] };
+    setSettings(updated);
+    setPrivacySettings(updated);
   };
 
   const PRIVACY_ITEMS = [
@@ -91,7 +93,10 @@ export const PrivacySettingScreen: React.FC<PrivacySettingProps> = ({ onNavigate
           <TouchableOpacity
             style={styles.primaryBtn}
             activeOpacity={0.85}
-            onPress={() => onNavigate('home_feed')}
+            onPress={async () => {
+              await completeOnboarding();
+              onNavigate('home_feed');
+            }}
           >
             <LinearGradient
               colors={COLORS.primaryGradient}

@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { GOALS } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface GoalSelectProps {
@@ -18,15 +19,16 @@ interface GoalSelectProps {
 }
 
 export const GoalSelectScreen: React.FC<GoalSelectProps> = ({ onNavigate }) => {
-  const [selectedGoals, setSelectedGoals] = useState<string[]>(['1', '2']);
+  const selectedGoals = useAuthStore((state) => state.selectedGoals);
+  const setGoals = useAuthStore((state) => state.setGoals);
 
   const toggleGoal = (id: string) => {
     if (selectedGoals.includes(id)) {
       if (selectedGoals.length > 1) {
-        setSelectedGoals(selectedGoals.filter((g) => g !== id));
+        setGoals(selectedGoals.filter((g) => g !== id));
       }
     } else {
-      setSelectedGoals([...selectedGoals, id]);
+      setGoals([...selectedGoals, id]);
     }
   };
 

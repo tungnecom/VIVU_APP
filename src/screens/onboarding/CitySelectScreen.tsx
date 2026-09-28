@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { CITIES } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface CitySelectProps {
@@ -19,7 +20,8 @@ interface CitySelectProps {
 }
 
 export const CitySelectScreen: React.FC<CitySelectProps> = ({ onNavigate }) => {
-  const [selectedCity, setSelectedCity] = useState('Đà Nẵng');
+  const selectedCity = useAuthStore((state) => state.selectedCity);
+  const setCity = useAuthStore((state) => state.setCity);
   const [query, setQuery] = useState('');
 
   const filteredCities = CITIES.filter((c) =>
@@ -66,7 +68,7 @@ export const CitySelectScreen: React.FC<CitySelectProps> = ({ onNavigate }) => {
                   isSelected && styles.cityItemSelected,
                 ]}
                 activeOpacity={0.7}
-                onPress={() => setSelectedCity(city)}
+                onPress={() => setCity(city)}
               >
                 <View style={styles.cityLeft}>
                   <Ionicons

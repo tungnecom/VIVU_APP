@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { SOCIAL_LEVELS } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface SocialLevelProps {
@@ -18,7 +19,8 @@ interface SocialLevelProps {
 }
 
 export const SocialLevelScreen: React.FC<SocialLevelProps> = ({ onNavigate }) => {
-  const [selectedLevel, setSelectedLevel] = useState('normal');
+  const selectedLevel = useAuthStore((state) => state.communicationStyle);
+  const setSocialLevel = useAuthStore((state) => state.setSocialLevel);
 
   return (
     <View style={styles.container}>
@@ -44,7 +46,7 @@ export const SocialLevelScreen: React.FC<SocialLevelProps> = ({ onNavigate }) =>
                   isSelected && styles.cardSelected,
                 ]}
                 activeOpacity={0.75}
-                onPress={() => setSelectedLevel(item.id)}
+                onPress={() => setSocialLevel(item.id)}
               >
                 <Text style={styles.emoji}>{item.emoji}</Text>
                 <View style={styles.info}>

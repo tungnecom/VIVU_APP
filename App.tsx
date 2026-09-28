@@ -50,10 +50,25 @@ import { MapScreen } from './src/screens/discovery/MapScreen';
 import { PlaceReviewScreen } from './src/screens/discovery/PlaceReviewScreen';
 import { ProfileScreen } from './src/screens/profile/ProfileScreen';
 
+import { useAuthStore } from './src/stores/authStore';
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenKey>('welcome');
   const [showNavigatorModal, setShowNavigatorModal] = useState(false);
   const [showViViModal, setShowViViModal] = useState(false);
+
+  const hasCompletedOnboarding = useAuthStore((state) => state.hasCompletedOnboarding);
+  const loadSession = useAuthStore((state) => state.loadSession);
+
+  React.useEffect(() => {
+    loadSession();
+  }, [loadSession]);
+
+  React.useEffect(() => {
+    if (hasCompletedOnboarding && currentScreen === 'welcome') {
+      setCurrentScreen('home_feed');
+    }
+  }, [hasCompletedOnboarding, currentScreen]);
 
   const navigateTo = (screen: ScreenKey) => {
     if (screen === 'vivi_assistant') {

@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Header } from '../../components/Header';
 import { INTERESTS } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface InterestSelectProps {
@@ -18,18 +19,14 @@ interface InterestSelectProps {
 }
 
 export const InterestSelectScreen: React.FC<InterestSelectProps> = ({ onNavigate }) => {
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([
-    'food',
-    'cafe',
-    'travel',
-    'camping',
-  ]);
+  const selectedInterests = useAuthStore((state) => state.selectedInterests);
+  const setInterests = useAuthStore((state) => state.setInterests);
 
   const toggleInterest = (id: string) => {
     if (selectedInterests.includes(id)) {
-      setSelectedInterests(selectedInterests.filter((item) => item !== id));
+      setInterests(selectedInterests.filter((item) => item !== id));
     } else {
-      setSelectedInterests([...selectedInterests, id]);
+      setInterests([...selectedInterests, id]);
     }
   };
 
