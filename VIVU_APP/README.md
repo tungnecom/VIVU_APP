@@ -1,1 +1,0 @@
-# VIVU_APP
