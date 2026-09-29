@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,1139 +15,885 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Header } from '../../components/Header';
-import { CURRENT_USER } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
-import { ApiClient } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
+import { useActivityStore } from '../../stores/activityStore';
 import { useFeedStore } from '../../stores/feedStore';
-import { PostItem, ScreenKey } from '../../types';
-import { Video, ResizeMode } from '../../utils/safeAV';
-import { MASTER_NATIONWIDE_PLACES } from '../../services/fullVietnamData';
+import { ApiClient } from '../../services/api';
+import { ScreenKey } from '../../types';
+import { KeoCard, KeoActivityItem } from '../../components/common/KeoCard';
 
 interface CreatePostProps {
-  onNavigate: (screen: ScreenKey) => void;
+  onNavigate: (screen: ScreenKey, params?: any) => void;
+  initialContext?: {
+    venueName?: string;
+    venueAddress?: string;
+    category?: string;
+  };
 }
 
-export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
-  const addPost = useFeedStore((state) => state.addPost);
-  const currentUser = useAuthStore((state) => state.user) || CURRENT_USER;
-  const token = useAuthStore((state) => state.token);
-  const selectedCity = useAuthStore((state) => state.selectedCity) || 'Đà Nẵng';
+const PUBLIC_VENUES_DANANG = [
+  { name: 'Cầu Rồng & Phố đi bộ Bạch Đằng', district: 'Hải Châu' },
+  { name: 'Biển Mỹ Khê (Khu công viên Biển Đông)', district: 'Sơn Trà' },
+  { name: 'Bán đảo Sơn Trà & Bãi Bụt', district: 'Sơn Trà' },
+  { name: 'Chợ Đêm Helio & Cung Thiếu Nhi', district: 'Hải Châu' },
+  { name: 'Wonderlust Cafe & Bakery (96 Trần Phú)', district: 'Hải Châu' },
+  { name: 'Bãi đá Cháy & Chùa Linh Ứng', district: 'Sơn Trà' },
+];
 
-  // Mode: 'moment' (Khoảnh khắc) vs 'recruitment' (Tuyển cạ) vs 'wish' (Nguyện vọng)
-  const [postMode, setPostMode] = useState<'moment' | 'recruitment' | 'wish'>('moment');
+export const CreatePostScreen: React.FC<CreatePostProps> = ({
+  onNavigate,
+  initialContext,
+}) => {
+  const token = useAuthStore((s) => s.token);
+  const currentUser = useAuthStore((s) => s.user);
+  const selectedCity = useAuthStore((s) => s.selectedCity) || 'Đà Nẵng';
+  const fetchActivities = useActivityStore((s) => s.fetchActivities);
+  const fetchPosts = useFeedStore((s) => s.fetchPosts);
 
-  const [content, setContent] = useState('');
-  const [images, setImages] = useState<string[]>([
-    'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800',
-  ]);
-  const [videoUri, setVideoUri] = useState<string | null>(null);
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  // Chế độ: 'keo' (Ưu tiên P0 - Luồng B) vs 'post' (Tạo bài viết - UX-03)
+  const [mode, setMode] = useState<'keo' | 'post'>('keo');
 
-  // Recruitment specifics
-  const [departureTime, setDepartureTime] = useState('Thứ 7, 18:00');
-  const [slotsCount, setSlotsCount] = useState('4 người');
-  const [budgetEstimate, setBudgetEstimate] = useState('150k - 200k / người');
-  const [displayDuration, setDisplayDuration] = useState('24 giờ');
+  // --- STATE TẠO KÈO (LUỒNG B) ---
+  const [keoTitle, setKeoTitle] = useState(
+    initialContext?.venueName ? `Đi ${initialContext.venueName} cùng mình nhé` : ''
+  );
+  const [keoCategory, setKeoCategory] = useState(initialContext?.category || 'Cafe');
+  const [keoDate, setKeoDate] = useState('Hôm nay');
+  const [keoTime, setKeoTime] = useState('18:30');
+  const [keoLocation, setKeoLocation] = useState(
+    initialContext?.venueName
+      ? `${initialContext.venueName}, ${initialContext.venueAddress || selectedCity}`
+      : 'Cầu Rồng & Phố đi bộ Bạch Đằng, Hải Châu, Đà Nẵng'
+  );
+  const [maxSlots, setMaxSlots] = useState<number>(4);
+  const [keoBudget, setKeoBudget] = useState('Tự túc');
+  const [keoDescription, setKeoDescription] = useState('');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Wish specifics
-  const [wishDestination, setWishDestination] = useState('Đèo Hải Vân & Vịnh Lăng Cô');
-  const [wishDate, setWishDate] = useState('Cuối tuần này');
+  // --- STATE TẠO BÀI VIẾT (UX-03) ---
+  const [postContent, setPostContent] = useState('');
+  const [postImages, setPostImages] = useState<string[]>([]);
+  const [postVenue, setPostVenue] = useState(initialContext?.venueName || '');
 
-  // Tagged Venue & Companions
-  const [taggedVenue, setTaggedVenue] = useState<{
-    id: string;
-    name: string;
-    address: string;
-    platformSource?: string;
-    latitude?: number;
-    longitude?: number;
-  } | null>({
-    id: 'dn_sontra_marina',
-    name: 'Sơn Trà Marina Cafe & Lounge',
-    address: 'Đường Hồ Xanh, Bán đảo Sơn Trà, Đà Nẵng',
-    platformSource: 'SHOPEEFOOD',
-    latitude: 16.1158,
-    longitude: 108.2536,
-  });
-
-  const [taggedFriends, setTaggedFriends] = useState<Array<{
-    id: string;
-    name: string;
-    avatar: string;
-  }>>([]);
-
-  const [hashtags, setHashtags] = useState<string[]>(['#ViVuVietNam', '#DuLich']);
-  const [tagInput, setTagInput] = useState('');
-
-  // Modals for selecting venue & friends
-  const [showVenueModal, setShowVenueModal] = useState(false);
-  const [showFriendModal, setShowFriendModal] = useState(false);
-  const [venueSearch, setVenueSearch] = useState('');
-  const [friendSearch, setFriendSearch] = useState('');
-  const [venuesList, setVenuesList] = useState<any[]>([]);
-  const [friendsList, setFriendsList] = useState<any[]>([]);
-  const [loadingVenues, setLoadingVenues] = useState(false);
-  const [loadingFriends, setLoadingFriends] = useState(false);
-
-  // Load real crawled venues & friends
-  useEffect(() => {
-    loadRealVenues();
-    loadRealFriends();
-  }, [selectedCity]);
-
-  const loadRealVenues = async () => {
-    setLoadingVenues(true);
+  // Chọn ảnh cho bài viết
+  const handlePickImage = async () => {
     try {
-      const res = await ApiClient.getPlaces(selectedCity);
-      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        setVenuesList([...res.data, ...MASTER_NATIONWIDE_PLACES]);
-      } else {
-        setVenuesList(MASTER_NATIONWIDE_PLACES);
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!res.canceled && res.assets[0].uri) {
+        setPostImages([...postImages, res.assets[0].uri]);
       }
     } catch {
-      setVenuesList(MASTER_NATIONWIDE_PLACES);
-    } finally {
-      setLoadingVenues(false);
+      Alert.alert('Lỗi', 'Không thể chọn ảnh lúc này.');
     }
   };
 
-  const loadRealFriends = async () => {
-    setLoadingFriends(true);
+  // Validate và gửi Tạo Kèo
+  const handleCreateKeo = async () => {
+    if (!token) {
+      Alert.alert('Cần đăng nhập', 'Vui lòng đăng nhập để đăng kèo.', [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Đăng nhập', onPress: () => onNavigate('login') },
+      ]);
+      return;
+    }
+
+    if (!keoTitle.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên hoạt động cho kèo.');
+      return;
+    }
+
+    if (!keoLocation.trim()) {
+      Alert.alert('Thiếu địa điểm', 'Vui lòng chọn hoặc nhập điểm hẹn công cộng.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const res = await ApiClient.getFriends();
-      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        setFriendsList(res.data);
+      const res = await ApiClient.createActivity(
+        {
+          title: keoTitle.trim(),
+          category: keoCategory,
+          location: keoLocation.trim(),
+          city: selectedCity,
+          time: keoTime,
+          date: keoDate,
+          maxParticipants: maxSlots,
+          budget: keoBudget,
+          description: keoDescription.trim() || 'Hẹn gặp mọi người tại điểm hẹn nhé!',
+          image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
+        },
+        token
+      );
+
+      if (res.success && res.data) {
+        setShowPreviewModal(false);
+        await fetchActivities(selectedCity);
+        Alert.alert(
+          'Đăng kèo thành công! 🎉',
+          'Kèo của bạn đã được mở để mọi người xin tham gia.',
+          [
+            {
+              text: 'Xem chi tiết kèo',
+              onPress: () => onNavigate('activity_detail', { id: res.data.id }),
+            },
+          ]
+        );
       } else {
-        setFriendsList([
-          { id: 'f1', name: 'Minh Thư', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', trustScore: 94 },
-          { id: 'f2', name: 'Quang Anh', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', trustScore: 88 },
-          { id: 'f3', name: 'Lan Anh', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150', trustScore: 96 },
-          { id: 'f4', name: 'Hoàng Nam', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', trustScore: 85 },
+        Alert.alert('Không thể tạo kèo', res.error || 'Vui lòng thử lại sau.');
+      }
+    } catch {
+      Alert.alert('Lỗi kết nối', 'Không thể gửi dữ liệu đến máy chủ.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Validate và gửi Tạo Bài Viết
+  const handleCreatePost = async () => {
+    if (!token) {
+      Alert.alert('Cần đăng nhập', 'Vui lòng đăng nhập để đăng bài viết.');
+      return;
+    }
+
+    if (!postContent.trim() && postImages.length === 0) {
+      Alert.alert('Thiếu nội dung', 'Vui lòng viết cảm nghĩ hoặc thêm ảnh.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await ApiClient.createPost(
+        {
+          content: postContent.trim(),
+          images: postImages,
+          location: postVenue || selectedCity,
+          city: selectedCity,
+        },
+        token
+      );
+
+      if (res.success) {
+        await fetchPosts();
+        Alert.alert('Đã đăng bài viết! 🎉', 'Bài viết đã xuất hiện trên Trang chủ.', [
+          { text: 'Về Trang chủ', onPress: () => onNavigate('home_feed') },
         ]);
+      } else {
+        Alert.alert('Lỗi', res.error || 'Không thể đăng bài viết.');
       }
     } catch {
-      // ignore
+      Alert.alert('Lỗi kết nối', 'Không thể kết nối máy chủ.');
     } finally {
-      setLoadingFriends(false);
+      setSubmitting(false);
     }
   };
 
-  // Pick photos
-  const handlePickImages = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Quyền truy cập', 'VIVU cần quyền truy cập thư viện ảnh để tải ảnh lên.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: 10,
-      quality: 0.85,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const newUris = result.assets.map((a) => a.uri);
-      setImages((prev) => [...prev, ...newUris].slice(0, 10));
-    }
+  // Đối tượng xem trước preview
+  const previewItem: KeoActivityItem = {
+    id: 'preview_id',
+    title: keoTitle || 'Hoạt động xem trước',
+    category: keoCategory,
+    location: keoLocation,
+    time: keoTime,
+    date: keoDate,
+    joined: 1,
+    maxParticipants: maxSlots,
+    budget: keoBudget,
+    image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800',
+    host: {
+      name: currentUser?.name || 'Bạn (Chủ kèo)',
+      avatar: currentUser?.avatar,
+      trustScore: currentUser?.trustScore || 85,
+      isVerified: true,
+    },
+    matchReason: 'Kèo do bạn vừa tạo',
   };
-
-  // Pick Video with audio
-  const handlePickVideo = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Quyền truy cập', 'VIVU cần quyền truy cập thư viện media để tải video.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['videos'],
-      allowsEditing: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setVideoUri(result.assets[0].uri);
-    }
-  };
-
-  // Add custom hashtag
-  const handleAddHashtag = () => {
-    if (!tagInput.trim()) return;
-    let tag = tagInput.trim();
-    if (!tag.startsWith('#')) tag = '#' + tag;
-    if (!hashtags.includes(tag)) {
-      setHashtags([...hashtags, tag]);
-    }
-    setTagInput('');
-  };
-
-  // Submit Post & Immediately Exit to Home Feed!
-  const handlePost = async () => {
-    if (!content.trim() && images.length === 0 && !videoUri && postMode === 'moment') {
-      Alert.alert('Nội dung trống', 'Vui lòng nhập nội dung, thêm ảnh hoặc video.');
-      return;
-    }
-
-    const targetLocName =
-      postMode === 'wish'
-        ? wishDestination
-        : taggedVenue
-        ? taggedVenue.name
-        : selectedCity;
-
-    const newPost: PostItem = {
-      id: 'post_' + Date.now(),
-      author: {
-        id: currentUser.id,
-        name: currentUser.name,
-        avatar: currentUser.avatar,
-        location: targetLocName,
-      },
-      timeAgo: 'Vừa xong',
-      content:
-        content.trim() ||
-        (postMode === 'wish'
-          ? `Nguyện vọng vi vu: Muốn đến ${wishDestination}! Cần tìm bạn đồng hành cùng gu ✨`
-          : postMode === 'recruitment'
-          ? `Tuyển cạ cùng vi vu: ${departureTime} tại ${targetLocName}! Ai đi cùng đăng ký ngay nhé 🛵`
-          : 'Khoảnh khắc vi vu mới ✨'),
-      images: images,
-      videoUrl: videoUri || undefined,
-      videoDuration: videoUri ? 15 : undefined,
-      hashtags: postMode === 'wish' ? [...hashtags, '#NguyenVongViVu', '#TimBanMoi'] : hashtags,
-      likes: 0,
-      commentsCount: 0,
-      sharesCount: 0,
-      taggedVenue: taggedVenue || undefined,
-      taggedCompanions: taggedFriends.length > 0 ? taggedFriends : undefined,
-      isRecruitment: postMode === 'recruitment',
-      recruitmentSlots: postMode === 'recruitment' ? parseInt(slotsCount) || 4 : undefined,
-      recruitmentJoined: 1,
-      isWish: postMode === 'wish',
-      wishDestination: postMode === 'wish' ? wishDestination : undefined,
-      wishDate: postMode === 'wish' ? wishDate : undefined,
-      activitySnippet:
-        postMode === 'recruitment'
-          ? {
-              location: targetLocName,
-              time: departureTime,
-              slots: slotsCount,
-              budget: budgetEstimate,
-            }
-          : postMode === 'wish'
-          ? {
-              location: wishDestination,
-              time: wishDate,
-              slots: '1-3 người',
-              budget: 'Tự do chia sẻ',
-            }
-          : undefined,
-    };
-
-    // 1. Optimistic Update immediately in client store
-    addPost(newPost);
-
-    let durationMinutes = 24 * 60;
-    if (displayDuration) {
-       const lower = displayDuration.toLowerCase();
-       if (lower.includes('phút')) {
-         durationMinutes = parseInt(lower) || 30;
-       } else if (lower.includes('giờ')) {
-         durationMinutes = (parseInt(lower) || 24) * 60;
-       } else if (lower.includes('ngày')) {
-         durationMinutes = (parseInt(lower) || 1) * 24 * 60;
-       } else {
-         durationMinutes = parseInt(lower) || 24 * 60;
-       }
-    }
-
-    // 2. Synchronize to Backend asynchronously
-    ApiClient.createPost(
-      {
-        content: newPost.content,
-        images: newPost.images,
-        videoUrl: newPost.videoUrl,
-        videoDuration: newPost.videoDuration,
-        hashtags: newPost.hashtags,
-        location: newPost.author.location,
-        time: departureTime,
-        slots: slotsCount,
-        taggedVenue: newPost.taggedVenue,
-        taggedCompanions: newPost.taggedCompanions,
-        isRecruitment: newPost.isRecruitment,
-        recruitmentSlots: newPost.recruitmentSlots,
-        recruitmentBudget: budgetEstimate,
-        isWish: newPost.isWish,
-        wishDestination: newPost.wishDestination,
-        wishDate: newPost.wishDate,
-        displayDuration: durationMinutes,
-      },
-      token || undefined
-    ).catch(() => {});
-
-    if (postMode === 'recruitment' && token) {
-      ApiClient.createActivity({
-        title: content.trim() || `Đi ${targetLocName} cùng mình nhé!`,
-        category: 'Khám phá',
-        city: selectedCity,
-        date: departureTime.split(',')[0] || 'Hôm nay',
-        time: departureTime.split(',')[1]?.trim() || '18:00',
-        location: targetLocName,
-        maxCount: parseInt(slotsCount) || 4,
-        image: images[0] || 'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=800',
-        description: content.trim() || `Tuyển cạ cùng vi vu tại ${targetLocName}`,
-        tags: hashtags
-      }, token).catch(() => {});
-    }
-
-    // 3. Immediately exit and navigate to Home Feed or Map
-    if (postMode === 'recruitment') {
-      onNavigate('map');
-    } else {
-      onNavigate('home_feed');
-    }
-  };
-
-  // Filter venues by search
-  const filteredVenues = venuesList.filter((v) => {
-    if (!venueSearch.trim()) return true;
-    const q = venueSearch.toLowerCase();
-    return (
-      v.name?.toLowerCase().includes(q) ||
-      v.address?.toLowerCase().includes(q) ||
-      v.category?.toLowerCase().includes(q)
-    );
-  });
-
-  // Filter friends by search
-  const filteredFriends = friendsList.filter((f) => {
-    if (!friendSearch.trim()) return true;
-    return f.name?.toLowerCase().includes(friendSearch.toLowerCase());
-  });
 
   return (
-    <View style={styles.container}>
-      <Header
-        title="Tạo bài viết"
-        onBack={() => onNavigate('home_feed')}
-        rightIcon="close"
-        onRightPress={() => onNavigate('home_feed')}
-      />
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => onNavigate('home_feed')}
+          accessibilityLabel="Đóng"
+        >
+          <Ionicons name="close" size={24} color={COLORS.textDark} />
+        </TouchableOpacity>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Mode Selector Tabs (3 Modes) */}
+        {/* Tab chuyển đổi chế độ: Kèo (Ưu tiên) vs Bài viết */}
         <View style={styles.modeTabs}>
           <TouchableOpacity
-            style={[styles.modeTab, postMode === 'moment' && styles.modeTabActive]}
-            onPress={() => setPostMode('moment')}
+            style={[styles.modeTab, mode === 'keo' && styles.modeTabActive]}
+            onPress={() => setMode('keo')}
           >
             <Ionicons
-              name="sparkles"
-              size={14}
-              color={postMode === 'moment' ? '#FFFFFF' : COLORS.textDark}
+              name="compass"
+              size={15}
+              color={mode === 'keo' ? '#FFFFFF' : COLORS.textDark}
             />
             <Text
               style={[
                 styles.modeTabText,
-                postMode === 'moment' && styles.modeTabTextActive,
+                mode === 'keo' && styles.modeTabTextActive,
               ]}
             >
-              Khoảnh khắc
+              Lên kèo đi cùng
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.modeTab, postMode === 'recruitment' && styles.modeTabActive]}
-            onPress={() => setPostMode('recruitment')}
+            style={[styles.modeTab, mode === 'post' && styles.modeTabActive]}
+            onPress={() => setMode('post')}
           >
             <Ionicons
-              name="people"
-              size={14}
-              color={postMode === 'recruitment' ? '#FFFFFF' : COLORS.textDark}
+              name="newspaper"
+              size={15}
+              color={mode === 'post' ? '#FFFFFF' : COLORS.textDark}
             />
             <Text
               style={[
                 styles.modeTabText,
-                postMode === 'recruitment' && styles.modeTabTextActive,
+                mode === 'post' && styles.modeTabTextActive,
               ]}
             >
-              Tuyển cạ 🛵
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.modeTab, postMode === 'wish' && styles.modeTabActive]}
-            onPress={() => setPostMode('wish')}
-          >
-            <Ionicons
-              name="navigate"
-              size={14}
-              color={postMode === 'wish' ? '#FFFFFF' : COLORS.textDark}
-            />
-            <Text
-              style={[
-                styles.modeTabText,
-                postMode === 'wish' && styles.modeTabTextActive,
-              ]}
-            >
-              Nguyện vọng 📍
+              Bài viết
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* User Info Bar */}
-        <View style={styles.userRow}>
-          <Image source={{ uri: currentUser.avatar }} style={styles.userAvatar} />
-          <View style={{ flex: 1 }}>
-            <View style={styles.userNameRow}>
-              <Text style={styles.userName}>{currentUser.name}</Text>
-              <View style={styles.trustBadge}>
-                <Ionicons name="shield-checkmark" size={12} color="#059669" />
-                <Text style={styles.trustText}>{currentUser.trustScore || 94}đ</Text>
-              </View>
-            </View>
-            <View style={styles.privacyBadge}>
-              <Ionicons name="earth" size={11} color={COLORS.primary} />
-              <Text style={styles.privacyText}>
-                {postMode === 'wish'
-                  ? 'Đồng bộ lên Bản Đồ toàn quốc'
-                  : 'Công khai cho cạ cứng'}
+        <View style={{ width: 32 }} />
+      </View>
+
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {mode === 'keo' ? (
+          /* ================= LUỒNG B: TẠO KÈO (ƯU TIÊN P0) ================= */
+          <View>
+            <View style={styles.promiseCallout}>
+              <Ionicons name="sparkles" size={16} color={COLORS.secondaryPurple} />
+              <Text style={styles.promiseCalloutText}>
+                Tạo kèo công khai để Vivu ghép bạn cùng sở thích vào đúng giờ hẹn!
               </Text>
             </View>
-          </View>
-        </View>
 
-        {/* Wish Mode Specific Box */}
-        {postMode === 'wish' && (
-          <View style={styles.wishBox}>
-            <View style={styles.wishHeader}>
-              <Ionicons name="flame" size={18} color="#EF4444" />
-              <Text style={styles.wishTitle}>Đăng Nguyện Vọng Đi Đâu Đó (Đồng bộ lên Map)</Text>
-            </View>
-            <Text style={styles.wishDesc}>
-              Nguyện vọng của bạn sẽ được ghim trực tiếp trên Bản Đồ để bạn bè quanh khu vực thấy và ghép cạ cùng bạn!
+            {/* 1. Tên hoạt động */}
+            <Text style={styles.label}>
+              1. Bạn muốn làm gì? <Text style={styles.req}>*</Text>
             </Text>
-
-            <View style={styles.recruitFieldRow}>
-              <Ionicons name="location" size={16} color={COLORS.primary} />
-              <Text style={styles.recruitFieldLabel}>Nơi muốn đến:</Text>
-              <TextInput
-                style={styles.recruitInput}
-                value={wishDestination}
-                onChangeText={setWishDestination}
-                placeholder="VD: Đèo Hải Vân, Phố cổ Hội An, Đỉnh Bàn Cờ..."
-              />
-            </View>
-
-            <View style={styles.recruitFieldRow}>
-              <Ionicons name="calendar-outline" size={16} color={COLORS.textMedium} />
-              <Text style={styles.recruitFieldLabel}>Thời gian:</Text>
-              <TextInput
-                style={styles.recruitInput}
-                value={wishDate}
-                onChangeText={setWishDate}
-                placeholder="VD: Chiều mai 17h, Cuối tuần này..."
-              />
-            </View>
-          </View>
-        )}
-
-        {/* Post text input */}
-        <TextInput
-          style={styles.textInput}
-          placeholder={
-            postMode === 'wish'
-              ? 'Chia sẻ thêm về nguyện vọng này: Bạn thích đi bằng xe máy hay ô tô? Muốn tìm cạ biết chụp ảnh hay sành ăn...'
-              : postMode === 'recruitment'
-              ? 'Mô tả chuyến đi: Lịch trình thế nào? Yêu cầu tính cách ra sao? Chi phí dự kiến...'
-              : 'Bạn muốn chia sẻ điều gì? Hãy chia sẻ khoảnh khắc ảnh/video cùng bạn bè nhé...'
-          }
-          placeholderTextColor={COLORS.textLight}
-          multiline
-          value={content}
-          onChangeText={setContent}
-        />
-
-        {/* Recruitment Specific Settings Block */}
-        {postMode === 'recruitment' && (
-          <View style={styles.recruitmentBox}>
-            <View style={styles.recruitmentHeader}>
-              <Ionicons name="compass" size={18} color={COLORS.primary} />
-              <Text style={styles.recruitmentTitle}>Thông tin chuyến tuyển cạ</Text>
-            </View>
-
-            <View style={styles.recruitFieldRow}>
-              <Ionicons name="time-outline" size={16} color={COLORS.textMedium} />
-              <Text style={styles.recruitFieldLabel}>Thời gian:</Text>
-              <TextInput
-                style={styles.recruitInput}
-                value={departureTime}
-                onChangeText={setDepartureTime}
-                placeholder="VD: Thứ 7, 18:00"
-              />
-            </View>
-
-            <View style={styles.recruitFieldRow}>
-              <Ionicons name="people-outline" size={16} color={COLORS.textMedium} />
-              <Text style={styles.recruitFieldLabel}>Số lượng:</Text>
-              <TextInput
-                style={styles.recruitInput}
-                value={slotsCount}
-                onChangeText={setSlotsCount}
-                placeholder="VD: 4 người"
-              />
-            </View>
-
-            <View style={styles.recruitFieldRow}>
-              <Ionicons name="wallet-outline" size={16} color={COLORS.textMedium} />
-              <Text style={styles.recruitFieldLabel}>Kinh phí dự kiến:</Text>
-              <TextInput
-                style={styles.recruitInput}
-                value={budgetEstimate}
-                onChangeText={setBudgetEstimate}
-                placeholder="VD: 150k - 200k / người"
-              />
-            </View>
-
-            <View style={styles.recruitFieldRow}>
-              <Ionicons name="timer-outline" size={16} color={COLORS.textMedium} />
-              <Text style={styles.recruitFieldLabel}>Tồn tại trên map:</Text>
-              <TextInput
-                style={styles.recruitInput}
-                value={displayDuration}
-                onChangeText={setDisplayDuration}
-                placeholder="VD: 2 giờ, 24 giờ..."
-              />
-            </View>
-          </View>
-        )}
-
-        {/* Tagged Spot Badge */}
-        {taggedVenue && (
-          <View style={styles.taggedVenueCard}>
-            <View style={styles.taggedVenueLeft}>
-              <View style={styles.venuePlatformBadge}>
-                <Text style={styles.platformBadgeText}>{taggedVenue.platformSource || 'VERIFIED'}</Text>
-              </View>
-              <Text style={styles.taggedVenueName}>{taggedVenue.name}</Text>
-              <Text style={styles.taggedVenueAddr} numberOfLines={1}>{taggedVenue.address}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setTaggedVenue(null)} style={styles.removeTagBtn}>
-              <Ionicons name="close-circle" size={22} color={COLORS.textLight} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Tagged Friends Badge */}
-        {taggedFriends.length > 0 && (
-          <View style={styles.taggedFriendsRow}>
-            <Text style={styles.taggedFriendsTitle}>Cùng với: </Text>
-            {taggedFriends.map((f, i) => (
-              <View key={i} style={styles.friendChip}>
-                <Image source={{ uri: f.avatar }} style={styles.friendChipAvatar} />
-                <Text style={styles.friendChipName}>@{f.name}</Text>
-                <TouchableOpacity onPress={() => setTaggedFriends(taggedFriends.filter((x) => x.id !== f.id))}>
-                  <Ionicons name="close" size={12} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Video Player Preview (If Picked) */}
-        {videoUri && (
-          <View style={styles.videoPreviewWrap}>
-            <Video
-              source={{ uri: videoUri }}
-              style={styles.videoPlayer}
-              resizeMode={ResizeMode.COVER}
-              isLooping
-              shouldPlay={isVideoPlaying}
-              isMuted={isVideoMuted}
-            />
-            <View style={styles.videoOverlayControls}>
-              <TouchableOpacity
-                style={[styles.videoControlBtn, { backgroundColor: 'rgba(239,68,68,0.85)' }]}
-                onPress={() => setVideoUri(null)}
-              >
-                <Ionicons name="trash-outline" size={16} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Uploaded Images Grid */}
-        {images.length > 0 && (
-          <View style={styles.imagePreviewGrid}>
-            {images.map((img, i) => (
-              <View key={i} style={styles.previewBox}>
-                <Image source={{ uri: img }} style={styles.previewImage} />
-                <TouchableOpacity
-                  style={styles.removeImageBtn}
-                  onPress={() => setImages(images.filter((_, idx) => idx !== i))}
-                >
-                  <Ionicons name="close" size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Hashtags Row */}
-        <View style={styles.hashtagSection}>
-          <View style={styles.hashtagList}>
-            {hashtags.map((h, i) => (
-              <View key={i} style={styles.hashtagItem}>
-                <Text style={styles.hashtagText}>{h}</Text>
-                <TouchableOpacity onPress={() => setHashtags(hashtags.filter((_, idx) => idx !== i))}>
-                  <Ionicons name="close" size={12} color={COLORS.primary} />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-          <View style={styles.hashtagInputRow}>
             <TextInput
-              style={styles.hashtagInput}
-              placeholder="Thêm hashtag (#ViVu, #DuLich...)"
+              style={styles.titleInput}
+              placeholder="VD: Cafe sáng ngắm sông Hàn & chia sẻ về ảnh film"
               placeholderTextColor={COLORS.textLight}
-              value={tagInput}
-              onChangeText={setTagInput}
-              onSubmitEditing={handleAddHashtag}
+              value={keoTitle}
+              onChangeText={setKeoTitle}
+              maxLength={80}
             />
-            <TouchableOpacity style={styles.addTagBtn} onPress={handleAddHashtag}>
-              <Ionicons name="add" size={18} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* Rich Media Buttons */}
-        <Text style={styles.optionsHeader}>Thêm vào bài viết</Text>
-        <View style={styles.optionsGrid}>
-          <TouchableOpacity style={styles.optionBtn} onPress={handlePickImages}>
-            <View style={[styles.optIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <Ionicons name="images" size={20} color="#3B82F6" />
-            </View>
-            <Text style={styles.optLabel}>Ảnh ({images.length}/10)</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.optionBtn} onPress={handlePickVideo}>
-            <View style={[styles.optIconBox, { backgroundColor: '#FEF2F2' }]}>
-              <Ionicons name="videocam" size={20} color="#EF4444" />
-            </View>
-            <Text style={styles.optLabel}>{videoUri ? 'Đổi Video' : 'Video'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.optionBtn}
-            onPress={() => setShowVenueModal(true)}
-          >
-            <View style={[styles.optIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <Ionicons name="location" size={20} color="#10B981" />
-            </View>
-            <Text style={styles.optLabel}>Gắn địa điểm</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.optionBtn}
-            onPress={() => setShowFriendModal(true)}
-          >
-            <View style={[styles.optIconBox, { backgroundColor: '#F5F3FF' }]}>
-              <Ionicons name="people" size={20} color="#8B5CF6" />
-            </View>
-            <Text style={styles.optLabel}>Gắn thẻ cạ</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Submit Post Button (Instantly posts & exits) */}
-        <TouchableOpacity
-          style={styles.submitBtn}
-          activeOpacity={0.85}
-          onPress={handlePost}
-        >
-          <LinearGradient
-            colors={COLORS.primaryGradient}
-            style={styles.btnGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <Ionicons name="send" size={18} color="#FFF" style={{ marginRight: 8 }} />
-            <Text style={styles.btnText}>
-              {postMode === 'wish'
-                ? 'Đăng nguyện vọng & đồng bộ Map'
-                : postMode === 'recruitment'
-                ? 'Đăng tuyển cạ vi vu'
-                : 'Đăng bài viết'}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Modal: Pick Crawled Spot with Search */}
-      <Modal visible={showVenueModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Gắn địa điểm thật (Zero-Garbage)</Text>
-              <TouchableOpacity onPress={() => setShowVenueModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textDark} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalSubtitle}>Tìm kiếm địa điểm du lịch, ẩm thực, trường học, khách sạn tại {selectedCity}</Text>
-
-            {/* Search Input for Venues */}
-            <View style={styles.modalSearchBar}>
-              <Ionicons name="search" size={18} color={COLORS.textLight} />
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Tìm tên quán ăn, cafe, địa danh, trường học..."
-                placeholderTextColor={COLORS.textLight}
-                value={venueSearch}
-                onChangeText={setVenueSearch}
-              />
-              {venueSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setVenueSearch('')}>
-                  <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Quick Add Custom Place when user types */}
-            {venueSearch.trim().length > 0 && (
-              <TouchableOpacity
-                style={styles.customAddButton}
-                onPress={() => {
-                  setTaggedVenue({
-                    id: 'custom_venue_' + Date.now(),
-                    name: venueSearch.trim(),
-                    address: selectedCity,
-                    platformSource: 'ĐỊA ĐIỂM TỰ CHỌN',
-                    latitude: 16.0544,
-                    longitude: 108.2022,
-                  });
-                  setVenueSearch('');
-                  setShowVenueModal(false);
-                }}
-              >
-                <Ionicons name="add-circle" size={20} color="#10B981" />
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.customAddTitle}>Gắn địa điểm này:</Text>
-                  <Text style={styles.customAddVal} numberOfLines={1}>"{venueSearch.trim()}"</Text>
-                </View>
-                <Text style={styles.customAddAction}>Chọn ➔</Text>
-              </TouchableOpacity>
-            )}
-
-            {loadingVenues ? (
-              <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 30 }} />
-            ) : (
-              <ScrollView style={{ maxHeight: 380 }}>
-                {filteredVenues.map((item, idx) => (
+            {/* 2. Danh mục */}
+            <Text style={styles.label}>Danh mục hoạt động</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryRow}>
+              {['Cafe', 'Ăn uống', 'Du lịch', 'Camping', 'Thể thao', 'Check-in'].map((cat) => {
+                const active = keoCategory === cat;
+                return (
                   <TouchableOpacity
-                    key={idx}
-                    style={styles.venueItem}
-                    onPress={() => {
-                      setTaggedVenue({
-                        id: item.id || 'v_' + idx,
-                        name: item.name,
-                        address: item.address || selectedCity,
-                        platformSource: item.platformSource || (item as any).source || 'VERIFIED',
-                        latitude: item.latitude || 16.0544,
-                        longitude: item.longitude || 108.2022,
-                      });
-                      setShowVenueModal(false);
-                    }}
+                    key={cat}
+                    style={[styles.catChip, active && styles.catChipActive]}
+                    onPress={() => setKeoCategory(cat)}
                   >
-                    <View style={styles.venuePlatformBadge}>
-                      <Text style={styles.platformBadgeText}>{item.platformSource || (item as any).source || 'VERIFIED'}</Text>
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text style={styles.venueItemName}>{item.name}</Text>
-                      <Text style={styles.venueItemAddr} numberOfLines={1}>{item.address || selectedCity}</Text>
-                    </View>
-                    <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.primary} />
+                    <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
+                      {cat}
+                    </Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
+                );
+              })}
+            </ScrollView>
 
-      {/* Modal: Tag Friends with Search */}
-      <Modal visible={showFriendModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Gắn thẻ cạ cứng</Text>
-              <TouchableOpacity onPress={() => setShowFriendModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textDark} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalSearchBar}>
-              <Ionicons name="search" size={18} color={COLORS.textLight} />
-              <TextInput
-                style={styles.modalSearchInput}
-                placeholder="Tìm bạn theo tên..."
-                placeholderTextColor={COLORS.textLight}
-                value={friendSearch}
-                onChangeText={setFriendSearch}
-              />
-              {friendSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setFriendSearch('')}>
-                  <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Quick Add Custom Friend when user types */}
-            {friendSearch.trim().length > 0 && (
-              <TouchableOpacity
-                style={[styles.customAddButton, { borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }]}
-                onPress={() => {
-                  const cleanName = friendSearch.trim().replace(/^@/, '');
-                  setTaggedFriends([
-                    ...taggedFriends,
-                    {
-                      id: 'custom_f_' + Date.now(),
-                      name: cleanName,
-                      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-                    },
-                  ]);
-                  setFriendSearch('');
-                }}
-              >
-                <Ionicons name="person-add" size={18} color="#7C3AED" />
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={[styles.customAddTitle, { color: '#7C3AED' }]}>Gắn thẻ cạ mới:</Text>
-                  <Text style={styles.customAddVal} numberOfLines={1}>"@{friendSearch.trim().replace(/^@/, '')}"</Text>
-                </View>
-                <Text style={[styles.customAddAction, { color: '#7C3AED' }]}>Thêm ➔</Text>
-              </TouchableOpacity>
-            )}
-
-            {loadingFriends ? (
-              <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 30 }} />
-            ) : (
-              <ScrollView style={{ maxHeight: 380 }}>
-                {filteredFriends.map((f, idx) => {
-                  const isTagged = taggedFriends.some((x) => x.id === f.id);
-                  return (
+            {/* 3. Thời gian hẹn (Validate giờ) */}
+            <Text style={styles.label}>
+              2. Khi nào bắt đầu? <Text style={styles.req}>*</Text>
+            </Text>
+            <View style={styles.rowTwoCols}>
+              {/* Ngày */}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.subLabel}>Ngày hẹn</Text>
+                <View style={styles.rowWrap}>
+                  {['Hôm nay', 'Ngày mai', 'Cuối tuần'].map((d) => (
                     <TouchableOpacity
-                      key={idx}
-                      style={styles.friendItem}
-                      onPress={() => {
-                        if (isTagged) {
-                          setTaggedFriends(taggedFriends.filter((x) => x.id !== f.id));
-                        } else {
-                          setTaggedFriends([...taggedFriends, { id: f.id, name: f.name, avatar: f.avatar }]);
-                        }
-                      }}
+                      key={d}
+                      style={[styles.smallChip, keoDate === d && styles.smallChipActive]}
+                      onPress={() => setKeoDate(d)}
                     >
-                      <Image source={{ uri: f.avatar }} style={styles.friendItemAvatar} />
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={styles.friendItemName}>{f.name}</Text>
-                        <Text style={styles.friendItemScore}>⭐ Uy tín: {f.trustScore || 90}đ</Text>
-                      </View>
-                      <Ionicons
-                        name={isTagged ? 'checkbox' : 'square-outline'}
-                        size={22}
-                        color={isTagged ? COLORS.primary : COLORS.textLight}
-                      />
+                      <Text style={[styles.smallChipText, keoDate === d && styles.smallChipTextActive]}>
+                        {d}
+                      </Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
+                  ))}
+                </View>
+              </View>
+
+              {/* Giờ */}
+              <View style={{ width: 110 }}>
+                <Text style={styles.subLabel}>Giờ hẹn</Text>
+                <TextInput
+                  style={styles.timeInput}
+                  placeholder="18:30"
+                  placeholderTextColor={COLORS.textLight}
+                  value={keoTime}
+                  onChangeText={setKeoTime}
+                />
+              </View>
+            </View>
+
+            {/* 4. Địa điểm công cộng */}
+            <Text style={styles.label}>
+              3. Điểm hẹn công cộng an toàn <Text style={styles.req}>*</Text>
+            </Text>
+            <TextInput
+              style={styles.locationInput}
+              placeholder="VD: Cầu Rồng, Biển Mỹ Khê hoặc tên quán cafe"
+              placeholderTextColor={COLORS.textLight}
+              value={keoLocation}
+              onChangeText={setKeoLocation}
+            />
+
+            {/* Gợi ý điểm công cộng Đà Nẵng */}
+            <Text style={styles.suggestionTitle}>Gợi ý điểm hẹn phổ biến tại Đà Nẵng:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.venueSuggestions}>
+              {PUBLIC_VENUES_DANANG.map((v) => (
+                <TouchableOpacity
+                  key={v.name}
+                  style={styles.venueSuggestionChip}
+                  onPress={() => setKeoLocation(`${v.name}, ${v.district}, Đà Nẵng`)}
+                >
+                  <Ionicons name="location" size={13} color={COLORS.secondaryPurple} />
+                  <Text style={styles.venueSuggestionText}>{v.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* 5. Số lượng người & Kinh phí */}
+            <View style={styles.rowTwoCols}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Cần tìm thêm mấy người?</Text>
+                <View style={styles.slotsRow}>
+                  {[2, 3, 4, 5, 6].map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.slotSelectBtn, maxSlots === s && styles.slotSelectBtnActive]}
+                      onPress={() => setMaxSlots(s)}
+                    >
+                      <Text style={[styles.slotSelectText, maxSlots === s && styles.slotSelectTextActive]}>
+                        {s} bạn
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.label}>Dự trù kinh phí (mỗi người)</Text>
+            <View style={styles.rowWrap}>
+              {['Tự túc', 'Dưới 50k', '50k - 100k', '100k - 200k', 'Miễn phí'].map((b) => (
+                <TouchableOpacity
+                  key={b}
+                  style={[styles.budgetChip, keoBudget === b && styles.budgetChipActive]}
+                  onPress={() => setKeoBudget(b)}
+                >
+                  <Text style={[styles.budgetText, keoBudget === b && styles.budgetTextActive]}>
+                    {b}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* 6. Lời nhắn thêm */}
+            <Text style={styles.label}>Lời nhắn / Lịch trình dự kiến</Text>
+            <TextInput
+              style={styles.descInput}
+              placeholder="VD: Hẹn gặp nhau ở quán lúc 8h30, ngồi cafe tán gẫu đến 10h sau đó đi dạo chụp ảnh phố nhé!"
+              placeholderTextColor={COLORS.textLight}
+              value={keoDescription}
+              onChangeText={setKeoDescription}
+              multiline
+              numberOfLines={3}
+            />
+
+            {/* Action Buttons: Xem trước & Đăng */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={styles.previewBtn}
+                onPress={() => setShowPreviewModal(true)}
+              >
+                <Ionicons name="eye-outline" size={18} color={COLORS.secondaryPurple} />
+                <Text style={styles.previewBtnText}>Xem trước kèo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.publishBtn, submitting && { opacity: 0.6 }]}
+                disabled={submitting}
+                onPress={handleCreateKeo}
+              >
+                <LinearGradient
+                  colors={COLORS.primaryGradient}
+                  style={styles.publishGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.publishBtnText}>
+                    {submitting ? 'Đang tạo...' : 'Đăng kèo ngay'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          /* ================= UX-03: TẠO BÀI VIẾT ================= */
+          <View>
+            <Text style={styles.label}>Chia sẻ khoảnh khắc / trải nghiệm</Text>
+            <TextInput
+              style={styles.postInput}
+              placeholder="Hôm nay bạn đã khám phá được điều gì thú vị tại Đà Nẵng?"
+              placeholderTextColor={COLORS.textLight}
+              value={postContent}
+              onChangeText={setPostContent}
+              multiline
+              numberOfLines={4}
+            />
+
+            {/* Gắn thẻ địa điểm */}
+            <Text style={styles.label}>Gắn thẻ địa điểm</Text>
+            <TextInput
+              style={styles.locationInput}
+              placeholder="VD: Wonderlust Cafe, Đỉnh Bàn Cờ..."
+              placeholderTextColor={COLORS.textLight}
+              value={postVenue}
+              onChangeText={setPostVenue}
+            />
+
+            {/* Thêm hình ảnh */}
+            <Text style={styles.label}>Hình ảnh</Text>
+            <View style={styles.imagesRow}>
+              <TouchableOpacity style={styles.addPhotoBox} onPress={handlePickImage}>
+                <Ionicons name="camera" size={24} color={COLORS.secondaryPurple} />
+                <Text style={styles.addPhotoText}>Thêm ảnh</Text>
+              </TouchableOpacity>
+
+              {postImages.map((uri, idx) => (
+                <View key={idx} style={styles.previewImageBox}>
+                  <Image source={{ uri }} style={styles.previewImage} />
+                  <TouchableOpacity
+                    style={styles.removeImageBtn}
+                    onPress={() => setPostImages(postImages.filter((_, i) => i !== idx))}
+                  >
+                    <Ionicons name="close" size={14} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
 
             <TouchableOpacity
-              style={styles.modalDoneBtn}
-              onPress={() => setShowFriendModal(false)}
+              style={[styles.publishPostBtn, submitting && { opacity: 0.6 }]}
+              disabled={submitting}
+              onPress={handleCreatePost}
             >
-              <Text style={styles.modalDoneText}>Hoàn tất ({taggedFriends.length} người)</Text>
+              <Text style={styles.publishPostText}>
+                {submitting ? 'Đang đăng...' : 'Đăng lên Bảng tin'}
+              </Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={{ height: 60 }} />
+      </ScrollView>
+
+      {/* Modal Preview Kèo trước khi đăng (Mục 6.2 Đặc tả) */}
+      <Modal
+        visible={showPreviewModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPreviewModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.previewSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Bản xem trước kèo của bạn</Text>
+            <Text style={styles.modalSubtitle}>
+              Đây là hình ảnh kèo của bạn sẽ xuất hiện trên trang Matching cho các thành viên khác nhìn thấy.
+            </Text>
+
+            <KeoCard activity={previewItem} onPress={() => {}} />
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setShowPreviewModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Chỉnh sửa tiếp</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
+                disabled={submitting}
+                onPress={handleCreateKeo}
+              >
+                <Text style={styles.submitBtnText}>
+                  {submitting ? 'Đang xuất bản...' : 'Đồng ý & Đăng'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FAF8F5',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 48 : 16,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
+  backBtn: {
+    padding: 6,
   },
   modeTabs: {
     flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
+    backgroundColor: '#FAF8F5',
+    borderRadius: 20,
     padding: 4,
-    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   modeTab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 10,
-    borderRadius: 10,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
   },
   modeTabActive: {
-    backgroundColor: COLORS.primary,
-    ...SHADOWS.glow,
+    backgroundColor: COLORS.secondaryPurple,
   },
   modeTabText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.textDark,
   },
   modeTabTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
   },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  userAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
-  },
-  userNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  userName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textDark,
-  },
-  trustBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  trustText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  privacyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  privacyText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '500',
-  },
-  textInput: {
-    fontSize: 15,
-    color: COLORS.textDark,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  wishBox: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    padding: 14,
-    marginBottom: 14,
-    gap: 8,
-  },
-  wishHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  wishTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  wishDesc: {
-    fontSize: 11,
-    color: COLORS.textMedium,
-    lineHeight: 16,
-    marginBottom: 4,
-  },
-  recruitmentBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    marginBottom: 14,
-    gap: 8,
-  },
-  recruitmentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  recruitmentTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  recruitFieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  recruitFieldLabel: {
-    fontSize: 13,
-    color: COLORS.textMedium,
-    fontWeight: '600',
-    width: 105,
-  },
-  recruitInput: {
+  scrollArea: {
     flex: 1,
-    fontSize: 13,
+  },
+  scrollContent: {
+    padding: 18,
+  },
+  promiseCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3EEFD',
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+  promiseCalloutText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.secondaryPurple,
+    flex: 1,
+    lineHeight: 18,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '800',
     color: COLORS.textDark,
+    marginBottom: 8,
+    marginTop: 14,
+  },
+  subLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textLight,
+    marginBottom: 6,
+  },
+  req: {
+    color: COLORS.primaryCoral,
+  },
+  titleInput: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  taggedVenueCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 12,
-  },
-  taggedVenueLeft: {
-    flex: 1,
-  },
-  venuePlatformBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.primary,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginBottom: 2,
-  },
-  platformBadgeText: {
-    color: '#FFF',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  taggedVenueName: {
-    fontSize: 13,
-    fontWeight: '700',
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
     color: COLORS.textDark,
-  },
-  taggedVenueAddr: {
-    fontSize: 11,
-    color: COLORS.textMedium,
-  },
-  removeTagBtn: {
-    padding: 4,
-  },
-  taggedFriendsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
-  },
-  taggedFriendsTitle: {
-    fontSize: 12,
-    color: COLORS.textMedium,
     fontWeight: '600',
   },
-  friendChip: {
+  categoryRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  catChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
+  },
+  catChipActive: {
+    backgroundColor: COLORS.secondaryPurple,
+    borderColor: COLORS.secondaryPurple,
+  },
+  catChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textDark,
+  },
+  catChipTextActive: {
+    color: '#FFFFFF',
+  },
+  rowTwoCols: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  rowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  smallChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  smallChipActive: {
+    backgroundColor: COLORS.secondaryPurple,
+    borderColor: COLORS.secondaryPurple,
+  },
+  smallChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textDark,
+  },
+  smallChipTextActive: {
+    color: '#FFFFFF',
+  },
+  timeInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: COLORS.textDark,
+  },
+  locationInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.textDark,
+  },
+  suggestionTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textLight,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  venueSuggestions: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  venueSuggestionChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
   },
-  friendChipAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  friendChipName: {
+  venueSuggestionText: {
     fontSize: 11,
-    color: '#FFF',
+    color: COLORS.textDark,
     fontWeight: '600',
   },
-  videoPreviewWrap: {
-    position: 'relative',
-    height: 200,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    marginBottom: 14,
-  },
-  videoPlayer: {
-    width: '100%',
-    height: '100%',
-  },
-  videoOverlayControls: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
+  slotsRow: {
     flexDirection: 'row',
     gap: 8,
-    zIndex: 10,
   },
-  videoControlBtn: {
-    width: 28,
-    height: 28,
+  slotSelectBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  slotSelectBtnActive: {
+    backgroundColor: COLORS.primaryCoral,
+    borderColor: COLORS.primaryCoral,
+  },
+  slotSelectText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  slotSelectTextActive: {
+    color: '#FFFFFF',
+  },
+  budgetChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  budgetChipActive: {
+    backgroundColor: COLORS.accentMint,
+    borderColor: COLORS.accentMint,
+  },
+  budgetText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textDark,
+  },
+  budgetTextActive: {
+    color: '#FFFFFF',
+  },
+  descInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    padding: 14,
+    fontSize: 14,
+    color: COLORS.textDark,
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  previewBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.secondaryPurple,
   },
-  imagePreviewGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 14,
+  previewBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.secondaryPurple,
   },
-  previewBox: {
-    position: 'relative',
-    width: 85,
-    height: 85,
-    borderRadius: 10,
+  publishBtn: {
+    flex: 1.4,
+    borderRadius: 22,
     overflow: 'hidden',
+    ...SHADOWS.glow,
+  },
+  publishGradient: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  publishBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  postInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    padding: 14,
+    fontSize: 15,
+    color: COLORS.textDark,
+    height: 110,
+    textAlignVertical: 'top',
+  },
+  imagesRow: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  addPhotoBox: {
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  addPhotoText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.secondaryPurple,
+    marginTop: 4,
+  },
+  previewImageBox: {
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
   },
   previewImage: {
     width: '100%',
@@ -1156,219 +903,90 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     width: 20,
     height: 20,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hashtagSection: {
-    marginBottom: 16,
-  },
-  hashtagList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  hashtagItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  hashtagText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  hashtagInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 40,
-  },
-  hashtagInput: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.textDark,
-  },
-  addTagBtn: {
-    padding: 6,
-  },
-  optionsHeader: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textMedium,
-    marginBottom: 10,
-  },
-  optionsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  optionBtn: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  optIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  optLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textDark,
-  },
-  submitBtn: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    ...SHADOWS.glow,
-  },
-  btnGradient: {
-    flexDirection: 'row',
+  publishPostBtn: {
+    backgroundColor: COLORS.secondaryPurple,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
+    marginTop: 24,
+    ...SHADOWS.glow,
   },
-  btnText: {
+  publishPostText: {
+    color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '700',
-    color: '#FFF',
+    fontWeight: '800',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(41, 38, 51, 0.65)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  previewSheet: {
+    backgroundColor: '#FAF8F5',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: 20,
-    maxHeight: '80%',
+    paddingBottom: 36,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginBottom: 14,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: COLORS.textDark,
+    marginBottom: 4,
   },
   modalSubtitle: {
-    fontSize: 12,
-    color: COLORS.textMedium,
-    marginBottom: 12,
-  },
-  modalSearchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
-    marginBottom: 12,
-    gap: 8,
-  },
-  modalSearchInput: {
-    flex: 1,
     fontSize: 13,
-    color: COLORS.textDark,
+    color: COLORS.textLight,
+    marginBottom: 16,
   },
-  venueItem: {
+  modalActionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  venueItemName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textDark,
-  },
-  venueItemAddr: {
-    fontSize: 11,
-    color: COLORS.textMedium,
-    marginTop: 2,
-  },
-  friendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  friendItemAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  friendItemName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.textDark,
-  },
-  friendItemScore: {
-    fontSize: 11,
-    color: '#059669',
-    marginTop: 2,
-  },
-  modalDoneBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
+    gap: 12,
     marginTop: 14,
   },
-  modalDoneText: {
-    color: '#FFF',
+  cancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  cancelBtnText: {
     fontSize: 14,
     fontWeight: '700',
+    color: COLORS.textDark,
   },
-  customAddButton: {
-    flexDirection: 'row',
+  submitBtn: {
+    flex: 1.5,
     alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1.5,
-    borderColor: '#A7F3D0',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 12,
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryCoral,
+    ...SHADOWS.glow,
   },
-  customAddTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  customAddVal: {
-    fontSize: 13,
+  submitBtnText: {
+    fontSize: 14,
     fontWeight: '800',
-    color: '#1F2937',
-  },
-  customAddAction: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
+    color: '#FFFFFF',
   },
 });

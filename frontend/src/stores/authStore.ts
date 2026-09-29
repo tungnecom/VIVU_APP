@@ -32,6 +32,7 @@ interface AuthState {
   completeOnboarding: () => Promise<void>;
   login: (token: string, user: UserProfile) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (partial: Partial<UserProfile>) => void;
   loadSession: () => Promise<void>;
 }
 
@@ -88,6 +89,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await AsyncStorage.removeItem('vivu_onboarding_completed');
     } catch {
       // ignore
+    }
+  },
+
+  updateUser: (partial: Partial<UserProfile>) => {
+    const current = get().user;
+    if (current) {
+      const updated = { ...current, ...partial };
+      set({ user: updated });
+      AsyncStorage.setItem('vivu_user', JSON.stringify(updated)).catch(() => {});
     }
   },
 

@@ -57,16 +57,19 @@ export interface PostItem {
     name: string;
     avatar: string;
     location: string;
+    trustScore?: number;
   };
-  timeAgo: string;
+  timeAgo?: string;
+  createdAt?: string;
   content: string;
   images: string[];
+  location?: string;
   videoUrl?: string;
   videoDuration?: number;
-  hashtags: string[];
+  hashtags?: string[];
   likes: number;
   commentsCount: number;
-  sharesCount: number;
+  sharesCount?: number;
   isLiked?: boolean;
   activitySnippet?: {
     location: string;

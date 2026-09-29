@@ -1,40 +1,118 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { COLORS, SHADOWS } from '../constants/theme';
 import { ScreenKey } from '../types';
 
-interface BottomTabBarProps {
-  currentScreen: ScreenKey;
-  onNavigate: (screen: ScreenKey) => void;
+export interface BottomTabBarProps {
+  // Khi dùng trong Expo Router <Tabs tabBar={props => <BottomTabBar {...props} />} />
+  state?: any;
+  navigation?: any;
+  descriptors?: any;
+  // Khi dùng độc lập với onNavigate
+  currentScreen?: ScreenKey;
+  onNavigate?: (screen: ScreenKey) => void;
   unreadCount?: number;
 }
 
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({
+  state,
+  navigation,
   currentScreen,
   onNavigate,
   unreadCount = 2,
 }) => {
+  const router = useRouter();
+
+  // Xác định tab đang active
+  const activeRouteName = state ? state.routes[state.index]?.name : null;
+
   const tabs = [
-    { key: 'home_feed' as ScreenKey, label: 'Trang chủ', iconActive: 'home', iconInactive: 'home-outline' },
-    { key: 'match_home' as ScreenKey, label: 'Match', iconActive: 'compass', iconInactive: 'compass-outline' },
-    { key: 'create_post' as ScreenKey, label: 'Tạo', isCenter: true },
-    { key: 'message_home' as ScreenKey, label: 'Tin nhắn', iconActive: 'chatbubbles', iconInactive: 'chatbubbles-outline', badge: unreadCount },
-    { key: 'profile' as ScreenKey, label: 'Cá nhân', iconActive: 'person', iconInactive: 'person-outline' },
+    {
+      key: 'home_feed' as ScreenKey,
+      routeName: 'index',
+      label: 'Trang chủ',
+      iconActive: 'home',
+      iconInactive: 'home-outline',
+    },
+    {
+      key: 'match_home' as ScreenKey,
+      routeName: 'match',
+      label: 'Đi cùng',
+      iconActive: 'compass',
+      iconInactive: 'compass-outline',
+    },
+    {
+      key: 'create_post' as ScreenKey,
+      routeName: 'create',
+      label: 'Tạo',
+      isCenter: true,
+    },
+    {
+      key: 'message_home' as ScreenKey,
+      routeName: 'messages',
+      label: 'Tin nhắn',
+      iconActive: 'chatbubbles',
+      iconInactive: 'chatbubbles-outline',
+      badge: unreadCount,
+    },
+    {
+      key: 'profile' as ScreenKey,
+      routeName: 'profile',
+      label: 'Cá nhân',
+      iconActive: 'person',
+      iconInactive: 'person-outline',
+    },
   ];
+
+  const handlePress = (tab: typeof tabs[0]) => {
+    if (tab.isCenter) {
+      if (onNavigate) {
+        onNavigate('create_post');
+      } else {
+        router.push('/create_post');
+      }
+      return;
+    }
+
+    if (navigation && tab.routeName) {
+      const isFocused = activeRouteName === tab.routeName;
+      const event = navigation.emit({
+        type: 'tabPress',
+        target: tab.routeName,
+        canPreventDefault: true,
+      });
+
+      if (!isFocused && !event.defaultPrevented) {
+        navigation.navigate(tab.routeName);
+      }
+    } else if (onNavigate) {
+      onNavigate(tab.key);
+    }
+  };
+
+  const isTabActive = (tab: typeof tabs[0]) => {
+    if (state && activeRouteName) {
+      return activeRouteName === tab.routeName;
+    }
+    return currentScreen === tab.key;
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.bar}>
-        {tabs.map((tab, idx) => {
+        {tabs.map((tab) => {
           if (tab.isCenter) {
             return (
               <View key="center-btn" style={styles.centerWrap}>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => onNavigate('create_post')}
+                  onPress={() => handlePress(tab)}
                   style={styles.centerBtnTouch}
+                  accessibilityLabel="Tạo kèo hoặc bài viết mới"
+                  accessibilityRole="button"
                 >
                   <LinearGradient
                     colors={COLORS.primaryGradient}
@@ -49,19 +127,23 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
             );
           }
 
-          const isActive = currentScreen === tab.key;
+          const active = isTabActive(tab);
+
           return (
             <TouchableOpacity
               key={tab.key}
               style={styles.tabItem}
               activeOpacity={0.7}
-              onPress={() => onNavigate(tab.key)}
+              onPress={() => handlePress(tab)}
+              accessibilityLabel={tab.label}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
             >
               <View style={styles.iconContainer}>
                 <Ionicons
-                  name={isActive ? (tab.iconActive as any) : (tab.iconInactive as any)}
+                  name={active ? (tab.iconActive as any) : (tab.iconInactive as any)}
                   size={24}
-                  color={isActive ? COLORS.primary : COLORS.textLight}
+                  color={active ? COLORS.primaryCoral : COLORS.textLight}
                 />
                 {!!tab.badge && tab.badge > 0 && (
                   <View style={styles.badge}>
@@ -72,7 +154,10 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
               <Text
                 style={[
                   styles.tabLabel,
-                  { color: isActive ? COLORS.primary : COLORS.textLight, fontWeight: isActive ? '700' : '500' },
+                  {
+                    color: active ? COLORS.primaryCoral : COLORS.textLight,
+                    fontWeight: active ? '700' : '500',
+                  },
                 ]}
               >
                 {tab.label}
@@ -89,9 +174,10 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#EEEEF2',
-    paddingBottom: 8,
+    borderTopColor: COLORS.border,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
     paddingTop: 6,
+    ...SHADOWS.sm,
   },
   bar: {
     flexDirection: 'row',
@@ -116,7 +202,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -3,
     right: -8,
-    backgroundColor: COLORS.danger,
+    backgroundColor: COLORS.primaryCoral,
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -139,9 +225,9 @@ const styles = StyleSheet.create({
     ...SHADOWS.glow,
   },
   centerGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
   },

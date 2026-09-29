@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Image,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,313 +11,216 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
-import { Header } from '../../components/Header';
-import { COLORS } from '../../constants/theme';
-import { ApiClient } from '../../services/api';
-import { socketService } from '../../services/socket';
+import { COLORS, SHADOWS } from '../../constants/theme';
 import { useAuthStore } from '../../stores/authStore';
+import { useActivityStore } from '../../stores/activityStore';
 import { ScreenKey } from '../../types';
+import { UserAvatar } from '../../components/common/UserAvatar';
+import { PlanPinnedHeader } from '../../components/common/PlanPinnedHeader';
 
 interface GroupChatProps {
-  onNavigate: (screen: ScreenKey) => void;
+  onNavigate: (screen: ScreenKey, params?: any) => void;
+  activityId?: string;
 }
 
-interface GroupMessage {
+interface ChatMessage {
   id: string;
   sender: string;
-  avatar: string;
-  text?: string;
+  avatar?: string;
+  text: string;
   time: string;
   isMe: boolean;
-  isBot?: boolean;
-  imageUrl?: string;
-  locationName?: string;
+  isSystem?: boolean;
 }
 
-export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
-  const [inputText, setInputText] = useState('');
+export const GroupChatScreen: React.FC<GroupChatProps> = ({
+  onNavigate,
+  activityId,
+}) => {
   const user = useAuthStore((s) => s.user);
-  const selectedCity = useAuthStore((s) => s.selectedCity) || 'Đà Nẵng';
+  const currentActivity = useActivityStore((s) => s.currentActivity);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const [messages, setMessages] = useState<GroupMessage[]>([
+  const [inputText, setInputText] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: '1',
-      sender: 'Minh Thư',
+      id: 'sys_1',
+      sender: 'Hệ thống Vivu',
+      text: 'Chào mừng các bạn đã được duyệt tham gia kèo! Kế hoạch đã được ghim ở phía trên.',
+      time: '08:00',
+      isMe: false,
+      isSystem: true,
+    },
+    {
+      id: 'm1',
+      sender: 'Nguyễn Minh Quân (Chủ kèo)',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      text: 'Chào cả nhà, Chủ nhật này 8h30 hẹn gặp nhau ở Wonderlust nhé! Quán có view rất thoáng.',
+      time: '08:05',
+      isMe: false,
+    },
+    {
+      id: 'm2',
+      sender: 'Trần Thu Hà',
       avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-      text: 'Tối nay có ai rảnh đi ăn không cả nhà ơi? 🍲',
-      time: '18:15',
+      text: 'Dạ vâng anh, em sẽ đến đúng giờ mang theo máy ảnh film luôn ạ ✨',
+      time: '08:12',
       isMe: false,
-    },
-    {
-      id: '2',
-      sender: 'Quang Anh',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      text: 'Mình biết Quán này ngon lắm nè, bánh tráng cuốn thịt heo Đại Lộc!',
-      time: '18:17',
-      isMe: false,
-    },
-    {
-      id: '3',
-      sender: 'ViVi (Trợ lý)',
-      avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
-      text: `✨ ViVi gợi ý: Quán Bánh tráng thịt heo ở Hải Châu (${selectedCity}) đang được đánh giá 4.8⭐. Các bạn có muốn mình tạo cuộc hẹn nhóm ngay tại đây không?`,
-      time: '18:18',
-      isMe: false,
-      isBot: true,
     },
   ]);
 
-  const ROOM_ID = 'group_foodie_danang';
+  const activity = currentActivity || {
+    id: activityId || 'act_01',
+    title: 'Cafe sáng ngắm sông Hàn & chia sẻ về nhiếp ảnh',
+    time: 'Chủ Nhật, 08:30 - 10:30',
+    location: 'Wonderlust Cafe, 96 Trần Phú, Hải Châu, Đà Nẵng',
+    joined: 3,
+    maxParticipants: 4,
+  };
 
-  useEffect(() => {
-    socketService.connect(user?.id || 'u_me');
-    socketService.joinRoom(ROOM_ID, {
-      id: user?.id || 'u_me',
-      name: user?.name || 'Tùng (Bạn)',
-    });
-
-    socketService.onReceiveMessage((incoming) => {
-      if (incoming.senderId !== (user?.id || 'u_me')) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: incoming.id || Date.now().toString(),
-            sender: incoming.senderName || 'Thành viên',
-            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-            text: incoming.text,
-            time: incoming.time || 'Vừa xong',
-            isMe: false,
-            isBot: incoming.isBot,
-          },
-        ]);
-      }
-    });
-
-    return () => {
-      socketService.offReceiveMessage();
-      socketService.leaveRoom(ROOM_ID);
-    };
-  }, []);
-
-  const handleSend = async () => {
+  const handleSendMessage = () => {
     if (!inputText.trim()) return;
-    const textToSend = inputText.trim();
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const newMsg: GroupMessage = {
-      id: Date.now().toString(),
-      sender: `${user?.name || 'Tùng'} (Bạn)`,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-      text: textToSend,
-      time: nowTime,
+    const newMsg: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      sender: user?.name || 'Bạn',
+      avatar: user?.avatar,
+      text: inputText.trim(),
+      time: 'Vừa xong',
       isMe: true,
     };
 
     setMessages((prev) => [...prev, newMsg]);
     setInputText('');
 
-    socketService.sendMessage(ROOM_ID, user?.id || 'u_me', user?.name || 'Bạn', textToSend);
-
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
-
-    // Nếu nhắc đến ViVi hoặc hỏi địa điểm
-    if (textToSend.toLowerCase().includes('vivi') || textToSend.toLowerCase().includes('quán nào') || textToSend.toLowerCase().includes('ăn gì')) {
-      setTimeout(async () => {
-        const res = await ApiClient.askViVi(textToSend, selectedCity);
-        const botReply = res?.data?.reply || `ViVi đề xuất quán Bún chả cá 109 Nguyễn Chí Thanh hoặc Chè sầu Liên cực ngon ở ${selectedCity} cho cả nhóm nhé! ✨`;
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            sender: 'ViVi (Trợ lý)',
-            avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
-            text: `✨ ViVi phản hồi: ${botReply}`,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isMe: false,
-            isBot: true,
-          },
-        ]);
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }, 700);
-    }
-  };
-
-  const handlePickImage = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-
-    if (!res.canceled && res.assets && res.assets.length > 0) {
-      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const imgMsg: GroupMessage = {
-        id: 'group_img_' + Date.now(),
-        sender: `${user?.name || 'Tùng'} (Bạn)`,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-        imageUrl: res.assets[0].uri,
-        time: nowTime,
-        isMe: true,
-      };
-      setMessages((prev) => [...prev, imgMsg]);
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-    }
-  };
-
-  const handleShareLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      let coordsName = `Điểm hẹn nhóm • ${selectedCity}`;
-      if (status === 'granted') {
-        coordsName = `Vị trí trực tiếp của tôi • ${selectedCity}`;
-      }
-
-      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const locMsg: GroupMessage = {
-        id: 'group_loc_' + Date.now(),
-        sender: `${user?.name || 'Tùng'} (Bạn)`,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-        locationName: coordsName,
-        time: nowTime,
-        isMe: true,
-      };
-      setMessages((prev) => [...prev, locMsg]);
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-    } catch {}
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Header
-        title="Foodie Đà Nẵng"
-        subtitle="24 thành viên • Kết nối Socket.io Real-time"
-        onBack={() => onNavigate('group_detail')}
-        rightIcon="call-outline"
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.circleBtn}
+          onPress={() => onNavigate('message_home')}
+          accessibilityLabel="Quay lại danh sách tin nhắn"
+        >
+          <Ionicons name="arrow-back" size={20} color={COLORS.textDark} />
+        </TouchableOpacity>
+
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {activity.title}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            Nhóm kèo • 👥 {activity.joined}/{activity.maxParticipants} thành viên
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.circleBtn}
+          onPress={() => onNavigate('activity_detail', { id: activity.id })}
+          accessibilityLabel="Xem chi tiết kèo"
+        >
+          <Ionicons name="information-circle-outline" size={22} color={COLORS.secondaryPurple} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Plan Pinned Header (Mục 6.3 & UX-20: Luôn ghim thông tin kế hoạch) */}
+      <PlanPinnedHeader
+        title={activity.title}
+        time={activity.time}
+        location={activity.location}
+        memberCount={activity.joined}
+        maxParticipants={activity.maxParticipants}
+        onViewPlanDetail={() => onNavigate('activity_detail', { id: activity.id })}
       />
 
+      {/* Messages Scroll Area */}
       <ScrollView
         ref={scrollViewRef}
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        style={styles.chatArea}
+        contentContainerStyle={styles.chatContent}
         showsVerticalScrollIndicator={false}
       >
-        {messages.map((m) => (
-          <View
-            key={m.id}
-            style={[
-              styles.msgRow,
-              m.isMe ? styles.msgRowMe : styles.msgRowOther,
-            ]}
-          >
-            {!m.isMe && (
-              <Image source={{ uri: m.avatar }} style={styles.senderAvatar} />
-            )}
+        {messages.map((item) => {
+          if (item.isSystem) {
+            return (
+              <View key={item.id} style={styles.systemMsgWrap}>
+                <Ionicons name="information-circle" size={14} color={COLORS.secondaryPurple} />
+                <Text style={styles.systemMsgText}>{item.text}</Text>
+              </View>
+            );
+          }
+
+          return (
             <View
-              style={[
-                styles.bubble,
-                m.isMe
-                  ? styles.bubbleMe
-                  : m.isBot
-                  ? styles.bubbleBot
-                  : styles.bubbleOther,
-              ]}
+              key={item.id}
+              style={[styles.msgRow, item.isMe ? styles.msgRowMe : styles.msgRowThem]}
             >
-              {!m.isMe && (
-                <Text
-                  style={[
-                    styles.senderName,
-                    m.isBot && { color: COLORS.primaryDark },
-                  ]}
-                >
-                  {m.sender}
-                </Text>
+              {!item.isMe && (
+                <UserAvatar
+                  uri={item.avatar}
+                  name={item.sender}
+                  size={32}
+                  trustScore={88}
+                />
               )}
 
-              {/* Text message */}
-              {m.text && (
+              <View
+                style={[
+                  styles.bubble,
+                  item.isMe ? styles.bubbleMe : styles.bubbleThem,
+                ]}
+              >
+                {!item.isMe && (
+                  <Text style={styles.senderName}>{item.sender}</Text>
+                )}
                 <Text
                   style={[
                     styles.msgText,
-                    m.isMe
-                      ? styles.msgTextMe
-                      : m.isBot
-                      ? styles.msgTextBot
-                      : styles.msgTextOther,
+                    item.isMe ? styles.msgTextMe : styles.msgTextThem,
                   ]}
                 >
-                  {m.text}
+                  {item.text}
                 </Text>
-              )}
-
-              {/* Image message */}
-              {m.imageUrl && (
-                <Image source={{ uri: m.imageUrl }} style={styles.groupImageThumb} resizeMode="cover" />
-              )}
-
-              {/* Location pin message */}
-              {m.locationName && (
-                <TouchableOpacity
-                  style={styles.locationPinCard}
-                  onPress={() => onNavigate('map')}
+                <Text
+                  style={[
+                    styles.msgTime,
+                    item.isMe ? styles.msgTimeMe : styles.msgTimeThem,
+                  ]}
                 >
-                  <Ionicons name="location" size={16} color="#EF4444" />
-                  <Text style={styles.locationPinText} numberOfLines={1}>{m.locationName}</Text>
-                </TouchableOpacity>
-              )}
-
-              <Text
-                style={[
-                  styles.timeText,
-                  m.isMe ? styles.timeTextMe : styles.timeTextOther,
-                ]}
-              >
-                {m.time}
-              </Text>
+                  {item.time}
+                </Text>
+              </View>
             </View>
-          </View>
-        ))}
-
-        {/* Quick Prompt Pill */}
-        <TouchableOpacity
-          style={styles.askViViPill}
-          onPress={() => setInputText('ViVi ơi, nhóm mình nên đi ăn quán nào gần biển Mỹ Khê?')}
-        >
-          <Ionicons name="sparkles" size={14} color={COLORS.primary} />
-          <Text style={styles.askViViText}>
-            Hỏi ViVi: Gợi ý quán ngon cho nhóm gần biển Mỹ Khê
-          </Text>
-        </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       {/* Input Bar */}
       <View style={styles.inputBar}>
-        <TouchableOpacity style={styles.mediaBtn} onPress={handlePickImage}>
-          <Ionicons name="image-outline" size={22} color={COLORS.textMedium} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mediaBtn} onPress={handleShareLocation}>
-          <Ionicons name="location-outline" size={22} color={COLORS.textMedium} />
-        </TouchableOpacity>
-
         <TextInput
-          style={styles.input}
-          placeholder="Nhập tin nhắn hoặc gõ ViVi..."
+          style={styles.textInput}
+          placeholder="Nhắn tin với cả nhóm..."
           placeholderTextColor={COLORS.textLight}
           value={inputText}
           onChangeText={setInputText}
-          onSubmitEditing={handleSend}
+          multiline
+          maxLength={300}
         />
-
-        <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-          <Ionicons name="send" size={18} color="#FFFFFF" />
+        <TouchableOpacity
+          style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+          disabled={!inputText.trim()}
+          onPress={handleSendMessage}
+          accessibilityLabel="Gửi tin nhắn"
+        >
+          <Ionicons name="send" size={16} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -327,148 +230,159 @@ export const GroupChatScreen: React.FC<GroupChatProps> = ({ onNavigate }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FE',
+    backgroundColor: '#FAF8F5',
   },
-  scroll: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 48 : 16,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  circleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FAF8F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  headerInfo: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: COLORS.textLight,
+    marginTop: 2,
+  },
+  chatArea: {
     flex: 1,
   },
-  content: {
+  chatContent: {
     padding: 16,
-    gap: 14,
+    gap: 12,
+  },
+  systemMsgWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3EEFD',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    alignSelf: 'center',
+    maxWidth: '90%',
+    marginVertical: 6,
+  },
+  systemMsgText: {
+    fontSize: 11,
+    color: COLORS.secondaryPurple,
+    fontWeight: '600',
+    textAlign: 'center',
+    flex: 1,
   },
   msgRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
+    marginBottom: 6,
+  },
+  msgRowThem: {
+    justifyContent: 'flex-start',
   },
   msgRowMe: {
     justifyContent: 'flex-end',
   },
-  msgRowOther: {
-    justifyContent: 'flex-start',
-  },
-  senderAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-  },
   bubble: {
-    maxWidth: '75%',
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    maxWidth: '75%',
   },
-  bubbleOther: {
+  bubbleThem: {
     backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#EEEEF2',
-  },
-  bubbleBot: {
-    backgroundColor: '#F3E8FF',
-    borderWidth: 1,
-    borderColor: '#D8B4FE',
+    borderColor: COLORS.border,
     borderBottomLeftRadius: 4,
   },
   bubbleMe: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.secondaryPurple,
     borderBottomRightRadius: 4,
   },
   senderName: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.textLight,
+    color: COLORS.secondaryPurple,
     marginBottom: 4,
   },
   msgText: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 19,
   },
-  msgTextOther: {
+  msgTextThem: {
     color: COLORS.textDark,
-  },
-  msgTextBot: {
-    color: '#581C87',
-    fontWeight: '500',
   },
   msgTextMe: {
     color: '#FFFFFF',
   },
-  timeText: {
+  msgTime: {
     fontSize: 10,
     marginTop: 4,
     alignSelf: 'flex-end',
   },
-  timeTextOther: {
+  msgTimeThem: {
     color: COLORS.textLight,
   },
-  timeTextMe: {
-    color: 'rgba(255,255,255,0.7)',
-  },
-  groupImageThumb: {
-    width: 200,
-    height: 130,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  locationPinCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-    marginBottom: 4,
-  },
-  locationPinText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-  askViViPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    borderRadius: 14,
-    padding: 10,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
-    marginTop: 6,
-  },
-  askViViText: {
-    fontSize: 12,
-    color: COLORS.primaryDark,
-    fontWeight: '600',
+  msgTimeMe: {
+    color: 'rgba(255, 255, 255, 0.75)',
   },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    gap: 10,
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#EEEEF2',
-    gap: 8,
-  },
-  mediaBtn: {
-    padding: 4,
-  },
-  input: {
-    flex: 1,
-    height: 42,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 21,
     paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 26 : 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  textInput: {
+    flex: 1,
+    backgroundColor: '#FAF8F5',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     fontSize: 14,
     color: COLORS.textDark,
+    maxHeight: 80,
   },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: COLORS.primary,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.secondaryPurple,
     alignItems: 'center',
     justifyContent: 'center',
+    ...SHADOWS.glow,
+  },
+  sendBtnDisabled: {
+    backgroundColor: '#D1D5DB',
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });

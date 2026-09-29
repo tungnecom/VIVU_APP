@@ -58,9 +58,20 @@ export const PrivacySettingScreen: React.FC<PrivacySettingProps> = ({ onNavigate
     },
   ];
 
+  const hasCompletedOnboarding = useAuthStore((state) => state.hasCompletedOnboarding);
+
   return (
     <View style={styles.container}>
-      <Header onBack={() => onNavigate('social_level')} transparent />
+      <Header
+        onBack={() => {
+          if (hasCompletedOnboarding) {
+            onNavigate('profile');
+          } else {
+            onNavigate('social_level');
+          }
+        }}
+        transparent
+      />
       <View style={styles.body}>
         <View style={styles.headerBlock}>
           <Text style={styles.title}>Thiết lập quyền riêng tư</Text>
@@ -94,8 +105,12 @@ export const PrivacySettingScreen: React.FC<PrivacySettingProps> = ({ onNavigate
             style={styles.primaryBtn}
             activeOpacity={0.85}
             onPress={async () => {
-              await completeOnboarding();
-              onNavigate('home_feed');
+              if (hasCompletedOnboarding) {
+                onNavigate('profile');
+              } else {
+                await completeOnboarding();
+                onNavigate('home_feed');
+              }
             }}
           >
             <LinearGradient
@@ -104,7 +119,9 @@ export const PrivacySettingScreen: React.FC<PrivacySettingProps> = ({ onNavigate
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.btnText}>Hoàn tất</Text>
+              <Text style={styles.btnText}>
+                {hasCompletedOnboarding ? 'Lưu thiết lập' : 'Hoàn tất'}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>

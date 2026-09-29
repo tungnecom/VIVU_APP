@@ -18,9 +18,13 @@ import { ScreenKey } from '../../types';
 
 interface GroupHomeProps {
   onNavigate: (screen: ScreenKey) => void;
+  showBottomBar?: boolean;
 }
 
-export const GroupHomeScreen: React.FC<GroupHomeProps> = ({ onNavigate }) => {
+export const GroupHomeScreen: React.FC<GroupHomeProps> = ({
+  onNavigate,
+  showBottomBar = false,
+}) => {
   const [activeTab, setActiveTab] = useState<'for_you' | 'active' | 'mine'>('for_you');
   const [search, setSearch] = useState('');
 
@@ -135,8 +139,8 @@ export const GroupHomeScreen: React.FC<GroupHomeProps> = ({ onNavigate }) => {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Bottom Tab Bar */}
-      <BottomTabBar currentScreen="group_home" onNavigate={onNavigate} />
+      {/* Bottom Tab Bar (Chỉ hiển thị khi chạy ngoài Expo Router) */}
+      {showBottomBar && <BottomTabBar currentScreen="group_home" onNavigate={onNavigate} />}
     </View>
   );
 };

@@ -2,213 +2,180 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BottomTabBar } from '../../components/BottomTabBar';
-import { ViViMascotModal } from '../../components/ViViMascotModal';
-
 import { COLORS, SHADOWS } from '../../constants/theme';
-import { ScreenKey } from '../../types';
-import { Video, ResizeMode } from '../../utils/safeAV';
-
-interface HomeFeedProps {
-  onNavigate: (screen: ScreenKey, params?: any) => void;
-  onOpenQuickSwitcher: () => void;
-}
-
 import { useAuthStore } from '../../stores/authStore';
 import { useFeedStore } from '../../stores/feedStore';
 import { useActivityStore } from '../../stores/activityStore';
+import { ScreenKey } from '../../types';
+import { UserAvatar } from '../../components/common/UserAvatar';
+import { KeoCard } from '../../components/common/KeoCard';
+import { EmptyState, LoadingSkeleton } from '../../components/common/StateView';
+
+interface HomeFeedProps {
+  onNavigate: (screen: ScreenKey, params?: any) => void;
+  onOpenQuickSwitcher?: () => void;
+}
+
+const CATEGORIES = [
+  { id: 'all', name: 'Tất cả', icon: 'grid-outline' },
+  { id: 'cafe', name: 'Cafe', icon: 'cafe-outline' },
+  { id: 'food', name: 'Ăn uống', icon: 'restaurant-outline' },
+  { id: 'travel', name: 'Du lịch', icon: 'airplane-outline' },
+  { id: 'camping', name: 'Camping', icon: 'bonfire-outline' },
+  { id: 'sports', name: 'Thể thao', icon: 'football-outline' },
+];
 
 export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   onNavigate,
-  onOpenQuickSwitcher,
 }) => {
-  const [showViVi, setShowViVi] = useState(false);
-  const [mutedVideos, setMutedVideos] = useState<Record<string, boolean>>({});
-  const posts = useFeedStore((state) => state.posts);
-  const likedPostIds = useFeedStore((state) => state.likedPostIds) || {};
-  const likedPosts = useFeedStore((state) => state.likedPosts) || likedPostIds;
-  const toggleLike = useFeedStore((state) => state.toggleLike);
-  const deletePost = useFeedStore((state) => state.deletePost);
-  const setSelectedPostId = useFeedStore((state) => state.setSelectedPostId);
-  const activeCategory = useFeedStore((state) => state.activeCategory);
-  const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
-  const fetchPosts = useFeedStore((state) => state.fetchPosts);
-  const activities = useActivityStore((state) => state.activities);
-  const fetchActivities = useActivityStore((state) => state.fetchActivities);
+  const selectedCity = useAuthStore((s) => s.selectedCity) || 'Đà Nẵng';
+  const currentUser = useAuthStore((s) => s.user);
 
-  const toggleVideoMute = (postId: string) => {
-    setMutedVideos((prev) => ({
-      ...prev,
-      [postId]: prev[postId] === undefined ? true : !prev[postId],
-    }));
-  };
+  const posts = useFeedStore((s) => s.posts);
+  const loadingPosts = useFeedStore((s) => s.loading);
+  const fetchPosts = useFeedStore((s) => s.fetchPosts);
+  const toggleLike = useFeedStore((s) => s.toggleLike);
 
-  const handlePostOptions = (post: any) => {
-    Alert.alert(
-      'Tùy chọn bài viết',
-      'Chọn thao tác bạn muốn thực hiện:',
-      [
-        { text: 'Chỉnh sửa bài viết', onPress: () => onNavigate('edit_post') },
-        {
-          text: 'Xóa bài viết',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Xác nhận xóa',
-              'Bạn có chắc chắn muốn xóa bài viết này khỏi VIVU Feed không?',
-              [
-                { text: 'Hủy', style: 'cancel' },
-                {
-                  text: 'Xóa ngay',
-                  style: 'destructive',
-                  onPress: () => {
-                    deletePost(post.id);
-                    Alert.alert('Đã xóa', 'Bài viết đã được xóa thành công khỏi Feed!');
-                  },
-                },
-              ]
-            );
-          },
-        },
-        { text: 'Đóng', style: 'cancel' },
-      ]
-    );
+  const activities = useActivityStore((s) => s.activities);
+  const fetchActivities = useActivityStore((s) => s.fetchActivities);
+
+  const [selectedCategory, setSelectedCategory] = useState('Tất cả');
+  const [refreshing, setRefreshing] = useState(false);
+  const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({});
+
+  const loadData = async () => {
+    const cat = selectedCategory === 'Tất cả' ? undefined : selectedCategory;
+    await Promise.all([
+      fetchPosts(cat),
+      fetchActivities(selectedCity, cat),
+    ]);
   };
 
   useEffect(() => {
-    fetchPosts(activeCategory);
-    fetchActivities(selectedCity, activeCategory);
-  }, []);
+    loadData();
+  }, [selectedCategory, selectedCity]);
 
-
-  const selectedCity = useAuthStore((state) => state.selectedCity);
-  const currentUser = useAuthStore((state) => state.user) || {
-    id: 'guest',
-    name: 'Khách',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-    trustScore: 0,
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
   };
 
-  const categories = [
-    { name: 'Ăn uống', icon: 'restaurant-outline' },
-    { name: 'Du lịch', icon: 'airplane-outline' },
-    { name: 'Camping', icon: 'bonfire-outline' },
-    { name: 'Cafe', icon: 'cafe-outline' },
-    { name: 'Chụp ảnh', icon: 'camera-outline' },
-    { name: 'Bản đồ', icon: 'map-outline', isMap: true },
-  ];
+  const handleToggleLike = (postId: string) => {
+    setLikedPosts((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
+    toggleLike(postId);
+  };
+
+  // Luồng C: Từ nội dung/bài viết sang tạo kèo có prefill thông tin địa điểm
+  const handleRuDiCung = (post: any) => {
+    onNavigate('create_post', {
+      venueName: post.location || post.taggedVenue?.name,
+      venueAddress: post.taggedVenue?.address || selectedCity,
+      category: post.category || 'Cafe',
+    });
+  };
+
+  // Kèo tiêu biểu đang mở
+  const featuredActivity = activities && activities.length > 0 ? activities[0] : null;
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
+          {/* Logo & Slogan */}
           <View style={styles.brandRow}>
             <Text style={styles.logoText}>VIVU</Text>
+            <View style={styles.brandBadge}>
+              <Text style={styles.brandBadgeText}>ĐI CÙNG</Text>
+            </View>
+          </View>
+
+          {/* Chọn thành phố & Thông báo */}
+          <View style={styles.headerActions}>
             <TouchableOpacity
-              style={styles.locationChip}
+              style={styles.cityChip}
+              activeOpacity={0.8}
               onPress={() => onNavigate('city_select')}
+              accessibilityLabel={`Thành phố: ${selectedCity}`}
             >
-              <Ionicons name="location" size={14} color={COLORS.primary} />
-              <Text style={styles.locationText}>{selectedCity}</Text>
-              <Ionicons name="chevron-down" size={12} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.headerRightActions}>
-            <TouchableOpacity
-              style={styles.switcherBtn}
-              onPress={onOpenQuickSwitcher}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="grid-outline" size={18} color={COLORS.primary} />
-              <Text style={styles.switcherText}>28 màn</Text>
+              <Ionicons name="location" size={13} color={COLORS.primaryCoral} />
+              <Text style={styles.cityText}>{selectedCity}</Text>
+              <Ionicons name="chevron-down" size={12} color={COLORS.textLight} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.iconCircle}
+              style={styles.iconBtn}
+              activeOpacity={0.8}
               onPress={() => onNavigate('map')}
+              accessibilityLabel="Bản đồ khám phá"
             >
-              <Ionicons name="map-outline" size={20} color={COLORS.textDark} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.iconCircle}
-              onPress={() => onNavigate('message_home')}
-            >
-              <Ionicons name="notifications-outline" size={20} color={COLORS.textDark} />
-              <View style={styles.notifDot} />
+              <Ionicons name="map-outline" size={18} color={COLORS.textDark} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.greetingWrap}>
-          <Text style={styles.greetingTitle}>
-            Chào buổi sáng, {currentUser.name} 👋
+        {/* Thanh tìm kiếm nhanh */}
+        <TouchableOpacity
+          style={styles.searchBar}
+          activeOpacity={0.85}
+          onPress={() => onNavigate('match_home')}
+          accessibilityLabel="Tìm kèo hoặc bạn đồng hành"
+        >
+          <Ionicons name="search" size={16} color={COLORS.textLight} />
+          <Text style={styles.searchPlaceholder}>
+            Tìm kèo cafe, du lịch, thể thao tại {selectedCity}...
           </Text>
-          <Text style={styles.greetingSubtitle}>Hôm nay bạn muốn đi đâu?</Text>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color={COLORS.textLight} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm địa điểm, hoạt động, nhóm..."
-            placeholderTextColor={COLORS.textLight}
-            onFocus={() => onNavigate('match_home')}
-          />
-          <TouchableOpacity onPress={() => onNavigate('map')}>
-            <Ionicons name="options-outline" size={20} color={COLORS.primary} />
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Main Feed Scroll */}
-      <ScrollView style={styles.feedScroll} showsVerticalScrollIndicator={false}>
-        {/* Categories Bar */}
+      {/* Main Scroll Content */}
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[COLORS.primaryCoral]}
+          />
+        }
+      >
+        {/* Section: Danh mục nhanh */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
+          style={styles.categoriesScroll}
+          contentContainerStyle={styles.categoriesContent}
         >
-          {categories.map((cat, idx) => {
-            const isActive = activeCategory === cat.name;
+          {CATEGORIES.map((cat) => {
+            const active = selectedCategory === cat.name;
             return (
               <TouchableOpacity
-                key={idx}
-                style={[
-                  styles.categoryPill,
-                  isActive && styles.categoryPillActive,
-                ]}
-                onPress={() => {
-                  if (cat.isMap) {
-                    onNavigate('map');
-                  } else {
-                    setActiveCategory(cat.name);
-                  }
-                }}
+                key={cat.id}
+                style={[styles.catChip, active && styles.catChipActive]}
+                activeOpacity={0.75}
+                onPress={() => setSelectedCategory(cat.name)}
               >
                 <Ionicons
                   name={cat.icon as any}
-                  size={16}
-                  color={isActive ? '#FFFFFF' : COLORS.textDark}
+                  size={14}
+                  color={active ? '#FFFFFF' : COLORS.textDark}
                 />
-                <Text
-                  style={[
-                    styles.categoryText,
-                    isActive && styles.categoryTextActive,
-                  ]}
-                >
+                <Text style={[styles.catText, active && styles.catTextActive]}>
                   {cat.name}
                 </Text>
               </TouchableOpacity>
@@ -216,350 +183,165 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
           })}
         </ScrollView>
 
-        {/* Section: Hoạt động phù hợp với bạn */}
-        {activities && activities.length > 0 && (
-          <>
+        {/* Section: Kèo nổi bật đang tìm cạ (Ưu tiên lời hứa sản phẩm) */}
+        {featuredActivity && (
+          <View style={styles.featuredSection}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Hoạt động phù hợp với bạn</Text>
-              <TouchableOpacity onPress={() => onNavigate('match_home' as ScreenKey)}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="flame" size={18} color={COLORS.primaryCoral} />
+                <Text style={styles.sectionTitle}>Kèo đang tìm cạ gần bạn</Text>
+              </View>
+              <TouchableOpacity onPress={() => onNavigate('match_home')}>
                 <Text style={styles.seeAllText}>Xem tất cả &gt;</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Activity Card */}
-            <TouchableOpacity
-              style={styles.activityCard}
-              activeOpacity={0.9}
-              onPress={() => onNavigate('activity_detail' as ScreenKey, { id: activities[0].id })}
-            >
-              <Image
-                source={{ uri: activities[0].image || 'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=800' }}
-                style={styles.activityImage}
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.7)']}
-                style={styles.activityGradient}
-              />
-              <View style={styles.activityBadge}>
-                <Text style={styles.activityBadgeText}>⭐ {activities[0].host?.trustScore > 80 ? '5.0' : '4.5'}</Text>
-              </View>
-
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>{activities[0].title}</Text>
-                <View style={styles.activityMetaRow}>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={13} color="#FFFFFF" />
-                    <Text style={styles.metaText}>{activities[0].time}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="people-outline" size={13} color="#FFFFFF" />
-                    <Text style={styles.metaText}>
-                      {activities[0].joinedCount}/{activities[0].maxCount} người
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.activityFooter}>
-                  <View style={styles.hostRow}>
-                    <Image
-                      source={{ uri: activities[0].host?.avatarUrl || activities[0].host?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' }}
-                      style={styles.hostAvatar}
-                    />
-                    <Text style={styles.hostName}>{activities[0].host?.name || 'Vivu User'}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.joinBtn}
-                    onPress={() => onNavigate('activity_detail' as ScreenKey, { id: activities[0].id })}
-                  >
-                    <Text style={styles.joinBtnText}>Tham gia</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </>
+            <KeoCard
+              activity={{
+                id: featuredActivity.id,
+                title: featuredActivity.title,
+                category: featuredActivity.category,
+                location: featuredActivity.location,
+                time: featuredActivity.time,
+                date: featuredActivity.date || 'Hôm nay',
+                joined: featuredActivity.joined || 1,
+                maxParticipants: featuredActivity.maxParticipants || 4,
+                image: featuredActivity.image,
+                host: {
+                  name: featuredActivity.host?.name || 'Thành viên Vivu',
+                  avatar: featuredActivity.host?.avatar,
+                  trustScore: featuredActivity.host?.trustScore || 85,
+                  isVerified: true,
+                },
+                matchReason: 'Kèo sắp diễn ra',
+              }}
+              onPress={() => onNavigate('activity_detail', { id: featuredActivity.id })}
+            />
+          </View>
         )}
 
-        {/* Section: Mọi người đang nói gì? */}
+        {/* Section: Bảng tin Cộng đồng (Feed bài viết thật) */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Mọi người đang nói gì?</Text>
-          <TouchableOpacity onPress={() => onNavigate('create_post')}>
-            <Text style={styles.seeAllText}>+ Tạo bài</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Khám phá & Cảm hứng</Text>
+          <Text style={styles.feedCountText}>{posts.length} bài viết</Text>
         </View>
 
-        {/* Post Cards */}
-        {posts.filter(p => !p.isRecruitment).map((post) => {
-          const isLiked = likedPostIds[post.id] ?? false;
-          const isMuted = mutedVideos[post.id] ?? false;
+        {loadingPosts && !refreshing ? (
+          <LoadingSkeleton count={2} height={280} />
+        ) : posts.length === 0 ? (
+          <EmptyState
+            icon="images-outline"
+            title="Chưa có bài viết mới"
+            message={`Hãy là người đầu tiên chia sẻ địa điểm thú vị tại ${selectedCity}!`}
+            actionLabel="+ Đăng bài viết ngay"
+            onAction={() => onNavigate('create_post')}
+          />
+        ) : (
+          posts.map((post) => {
+            const isLiked = likedPosts[post.id];
+            const likeCount = (post.likes || 0) + (isLiked ? 1 : 0);
 
-          return (
-            <View key={post.id} style={styles.postCard}>
-              {/* Author Row */}
-              <View style={styles.postHeader}>
-                <TouchableOpacity
-                  style={styles.authorInfo}
-                  onPress={() => onNavigate('profile')}
-                >
-                  <Image
-                    source={{ uri: post.author.avatar }}
-                    style={styles.authorAvatar}
+            return (
+              <View key={post.id} style={styles.postCard}>
+                {/* Author Info */}
+                <View style={styles.authorRow}>
+                  <UserAvatar
+                    uri={post.author?.avatar}
+                    name={post.author?.name || 'Vivu Traveler'}
+                    size={40}
+                    trustScore={post.author?.trustScore || 85}
+                    isVerified={true}
                   />
-                  <View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.authorName}>{post.author.name}</Text>
-                      {post.isRecruitment && (
-                        <View style={styles.recruitBadge}>
-                          <Text style={styles.recruitBadgeText}>Tuyển cạ</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.postSubRow}>
-                      <Text style={styles.postTime}>{post.timeAgo}</Text>
-                      <Text style={styles.dot}>•</Text>
-                      <Ionicons name="location-sharp" size={12} color={COLORS.primary} />
-                      <Text style={styles.postLocation}>{post.author.location}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => handlePostOptions(post)}>
-                  <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.textLight} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Tagged Companions if any */}
-              {post.taggedCompanions && post.taggedCompanions.length > 0 && (
-                <View style={styles.feedCompanionsRow}>
-                  <Text style={styles.feedCompanionsText}>Cùng với: </Text>
-                  {post.taggedCompanions.map((comp, cIdx) => (
-                    <View key={cIdx} style={styles.feedCompanionChip}>
-                      <Image source={{ uri: comp.avatar }} style={styles.feedCompanionAvatar} />
-                      <Text style={styles.feedCompanionName}>@{comp.name}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Post Content */}
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedPostId(post.id);
-                  onNavigate('post_detail');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.postContentText}>{post.content}</Text>
-
-                {/* Hashtags */}
-                <View style={styles.hashtagRow}>
-                  {post.hashtags.map((tag, tIdx) => (
-                    <Text key={tIdx} style={styles.hashtagText}>
-                      {tag}{' '}
+                  <View style={styles.authorInfo}>
+                    <Text style={styles.authorName}>
+                      {post.author?.name || 'Thành viên Vivu'}
                     </Text>
-                  ))}
+                    <Text style={styles.postMetaText}>
+                      {post.createdAt || 'Vừa xong'} • {post.location || selectedCity}
+                    </Text>
+                  </View>
                 </View>
 
-                {/* Real Crawled Spot Tag Card */}
-                {post.taggedVenue && (
+                {/* Content text */}
+                {post.content && (
+                  <Text style={styles.postBodyText}>{post.content}</Text>
+                )}
+
+                {/* Media Image */}
+                {post.images && post.images.length > 0 && (
                   <TouchableOpacity
-                    style={styles.feedVenueCard}
-                    activeOpacity={0.8}
-                    onPress={() => onNavigate('map')}
+                    activeOpacity={0.92}
+                    onPress={() => onNavigate('post_detail', { id: post.id })}
+                    style={styles.postImageContainer}
                   >
-                    <View style={styles.feedVenuePlatformBadge}>
-                      <Text style={styles.feedVenuePlatformText}>
-                        {post.taggedVenue.platformSource || 'ZERO-GARBAGE'}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text style={styles.feedVenueName}>{post.taggedVenue.name}</Text>
-                      <Text style={styles.feedVenueAddress} numberOfLines={1}>
-                        {post.taggedVenue.address}
-                      </Text>
-                    </View>
-                    <Ionicons name="map" size={16} color={COLORS.primary} />
+                    <Image
+                      source={{ uri: post.images[0] }}
+                      style={styles.postImage}
+                    />
                   </TouchableOpacity>
                 )}
 
-                {/* Recruitment Trip Card if active */}
-                {post.isRecruitment && post.activitySnippet && (
-                  <View style={styles.recruitmentTripCard}>
-                    <View style={styles.recruitmentTripTop}>
-                      <View style={styles.recruitmentTripTag}>
-                        <Ionicons name="compass" size={14} color="#FFF" />
-                        <Text style={styles.recruitmentTripTagText}>Lịch trình tuyển cạ</Text>
-                      </View>
-                      <Text style={styles.recruitmentSlotsText}>
-                        Đã có {post.recruitmentJoined || 2}/{post.recruitmentSlots || 4} bạn
+                {/* Tagged Venue & LUỒNG C: Nút "Rủ đi cùng" */}
+                {post.location && (
+                  <View style={styles.venueActionBanner}>
+                    <View style={styles.venueInfoCol}>
+                      <Ionicons name="location" size={15} color={COLORS.secondaryPurple} />
+                      <Text style={styles.venueNameText} numberOfLines={1}>
+                        {post.location}
                       </Text>
                     </View>
-                    <View style={styles.recruitmentTripDetails}>
-                      <View style={styles.tripDetailRow}>
-                        <Ionicons name="time" size={14} color={COLORS.primary} />
-                        <Text style={styles.tripDetailText}>{post.activitySnippet.time}</Text>
-                      </View>
-                      {!!post.activitySnippet.budget && (
-                        <View style={styles.tripDetailRow}>
-                          <Ionicons name="wallet" size={14} color="#10B981" />
-                          <Text style={styles.tripDetailText}>{post.activitySnippet.budget}</Text>
-                        </View>
-                      )}
-                    </View>
+
+                    {/* CTA Luồng C: Biến địa điểm này thành kèo */}
                     <TouchableOpacity
-                      style={styles.applyRecruitBtn}
-                      activeOpacity={0.8}
-                      onPress={() => Alert.alert('Đã gửi yêu cầu ghép cạ!', 'Chủ bài viết sẽ nhận được thông báo kết nối cạ cùng bạn.')}
+                      style={styles.ruDiCungBtn}
+                      activeOpacity={0.85}
+                      onPress={() => handleRuDiCung(post)}
+                      accessibilityLabel="Rủ bạn bè đi cùng địa điểm này"
                     >
-                      <LinearGradient
-                        colors={COLORS.primaryGradient}
-                        style={styles.applyRecruitGradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                      >
-                        <Ionicons name="person-add" size={14} color="#FFF" />
-                        <Text style={styles.applyRecruitText}>Đăng ký tham gia cạ này</Text>
-                      </LinearGradient>
+                      <Ionicons name="compass" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.ruDiCungText}>Rủ đi cùng</Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
-                {/* Rich Video Player (with sound control & audio badge) */}
-                {post.videoUrl && (
-                  <View style={styles.videoCardContainer}>
-                    <Video
-                      source={{ uri: post.videoUrl }}
-                      style={styles.feedVideo}
-                      resizeMode={ResizeMode.COVER}
-                      isLooping
-                      shouldPlay={true}
-                      isMuted={isMuted}
+                {/* Footer Actions: Like, Comment, Share */}
+                <View style={styles.postFooter}>
+                  <TouchableOpacity
+                    style={styles.footerActionBtn}
+                    onPress={() => handleToggleLike(post.id)}
+                  >
+                    <Ionicons
+                      name={isLiked ? 'heart' : 'heart-outline'}
+                      size={20}
+                      color={isLiked ? COLORS.primaryCoral : COLORS.textLight}
                     />
-                    <TouchableOpacity
-                      style={styles.soundToggleBtn}
-                      onPress={() => toggleVideoMute(post.id)}
-                    >
-                      <Ionicons
-                        name={isMuted ? 'volume-mute' : 'volume-high'}
-                        size={16}
-                        color="#FFF"
-                      />
-                      <Text style={styles.soundToggleText}>
-                        {isMuted ? 'Bật tiếng' : 'Có tiếng'}
-                      </Text>
-                    </TouchableOpacity>
-                    <View style={styles.videoDurationBadge}>
-                      <Ionicons name="videocam" size={12} color="#FFF" />
-                      <Text style={styles.videoDurationText}>
-                        {post.videoDuration ? `${post.videoDuration}s` : 'HD'}
-                      </Text>
-                    </View>
-                  </View>
-                )}
+                    <Text style={[styles.actionNum, isLiked && { color: COLORS.primaryCoral }]}>
+                      {likeCount}
+                    </Text>
+                  </TouchableOpacity>
 
-                {/* Image Gallery */}
-                {!post.videoUrl && post.images && post.images.length > 0 && (
-                  <View style={styles.galleryContainer}>
-                    <Image
-                      source={{ uri: post.images[0] }}
-                      style={styles.galleryMainImage}
-                    />
-                    {post.images.length > 1 && (
-                      <View style={styles.gallerySubColumn}>
-                        <Image
-                          source={{ uri: post.images[1] }}
-                          style={styles.gallerySubImage}
-                        />
-                        {post.images[2] && (
-                          <Image
-                            source={{ uri: post.images[2] }}
-                            style={styles.gallerySubImage}
-                          />
-                        )}
-                      </View>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.footerActionBtn}
+                    onPress={() => onNavigate('post_detail', { id: post.id })}
+                  >
+                    <Ionicons name="chatbubble-outline" size={18} color={COLORS.textLight} />
+                    <Text style={styles.actionNum}>{post.commentsCount || 0}</Text>
+                  </TouchableOpacity>
 
-              {/* ViVi Smart Suggestion Chip */}
-              <TouchableOpacity
-                style={styles.viviChip}
-                onPress={() => setShowViVi(true)}
-              >
-                <Ionicons name="sparkles" size={14} color={COLORS.primary} />
-                <Text style={styles.viviChipText}>
-                  ViVi gợi ý: Có thể hỏi {post.author.name} về địa điểm và cách kết nối đi chung!
-                </Text>
-              </TouchableOpacity>
-
-              {/* Engagement Stats & Actions */}
-              <View style={styles.actionsBar}>
-                <TouchableOpacity
-                  style={styles.actionItem}
-                  onPress={() => toggleLike(post.id)}
-                >
-                  <Ionicons
-                    name={isLiked ? 'heart' : 'heart-outline'}
-                    size={20}
-                    color={isLiked ? COLORS.danger : COLORS.textMedium}
-                  />
-                  <Text style={[styles.actionNum, isLiked && { color: COLORS.danger }]}>
-                    {post.likes + (isLiked ? 1 : 0)}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.actionItem}
-                  onPress={() => {
-                    setSelectedPostId(post.id);
-                    onNavigate('post_detail');
-                  }}
-                >
-                  <Ionicons name="chatbubble-outline" size={19} color={COLORS.textMedium} />
-                  <Text style={styles.actionNum}>{post.commentsCount}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.actionItem}
-                  onPress={() => Alert.alert('Chia sẻ', 'Đã sao chép liên kết bài viết vào bộ nhớ tạm!')}
-                >
-                  <Ionicons name="share-social-outline" size={19} color={COLORS.textMedium} />
-                  <Text style={styles.actionNum}>{post.sharesCount}</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.footerActionBtn}
+                    onPress={() => Alert.alert('Chia sẻ', 'Liên kết bài viết đã được sao chép!')}
+                  >
+                    <Ionicons name="share-social-outline" size={18} color={COLORS.textLight} />
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          );
-        })}
+            );
+          })
+        )}
 
-        <View style={{ height: 90 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Floating ViVi Assistant Trigger */}
-      <TouchableOpacity
-        style={styles.floatingViViBtn}
-        activeOpacity={0.85}
-        onPress={() => setShowViVi(true)}
-      >
-        <LinearGradient
-          colors={COLORS.primaryGradient}
-          style={styles.floatingViViGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Ionicons name="sparkles" size={22} color="#FFD700" />
-          <Text style={styles.floatingViViText}>ViVi</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-
-      {/* Bottom Tab Bar */}
-      <BottomTabBar currentScreen="home_feed" onNavigate={onNavigate} />
-
-      {/* ViVi Assistant Modal */}
-      <ViViMascotModal
-        visible={showViVi}
-        onClose={() => setShowViVi(false)}
-        onSelectAction={() => setShowViVi(false)}
-      />
     </View>
   );
 };
@@ -567,361 +349,254 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FE',
+    backgroundColor: '#FAF8F5',
   },
   header: {
     backgroundColor: '#FFFFFF',
     paddingTop: 16,
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 14,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
     ...SHADOWS.sm,
   },
   headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   logoText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
-    color: COLORS.primary,
+    color: COLORS.primaryCoral,
     letterSpacing: 1.5,
   },
-  locationChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primarySoft,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    gap: 4,
+  brandBadge: {
+    backgroundColor: '#F3EEFD',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  locationText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
+  brandBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.secondaryPurple,
+    letterSpacing: 0.8,
   },
-  headerRightActions: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  switcherBtn: {
+  cityChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primarySoft,
+    gap: 4,
+    backgroundColor: '#FAF8F5',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 14,
-    gap: 4,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#D8D4FF',
+    borderColor: COLORS.border,
   },
-  switcherText: {
+  cityText: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.primary,
-  },
-  iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  notifDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.danger,
-  },
-  greetingWrap: {
-    marginTop: 14,
-    marginBottom: 12,
-  },
-  greetingTitle: {
-    fontSize: 20,
-    fontWeight: '800',
     color: COLORS.textDark,
   },
-  greetingSubtitle: {
-    fontSize: 13,
-    color: COLORS.textMedium,
-    marginTop: 2,
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FAF8F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 14,
+    gap: 8,
+    backgroundColor: '#FAF8F5',
     paddingHorizontal: 14,
-    height: 44,
+    paddingVertical: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  searchInput: {
+  searchPlaceholder: {
+    fontSize: 13,
+    color: COLORS.textLight,
     flex: 1,
-    marginLeft: 10,
-    fontSize: 14,
-    color: COLORS.textDark,
   },
-  feedScroll: {
+  scrollArea: {
     flex: 1,
   },
-  categoryScroll: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+  scrollContent: {
+    padding: 16,
+  },
+  categoriesScroll: {
+    marginBottom: 16,
+  },
+  categoriesContent: {
     gap: 8,
   },
-  categoryPill: {
+  catChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 6,
+    borderColor: COLORS.border,
   },
-  categoryPillActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+  catChipActive: {
+    backgroundColor: COLORS.secondaryPurple,
+    borderColor: COLORS.secondaryPurple,
   },
-  categoryText: {
-    fontSize: 13,
+  catText: {
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.textDark,
   },
-  categoryTextActive: {
+  catTextActive: {
     color: '#FFFFFF',
+  },
+  featuredSection: {
+    marginBottom: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginTop: 16,
+    justifyContent: 'space-between',
     marginBottom: 12,
+    marginTop: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: COLORS.textDark,
   },
   seeAllText: {
-    fontSize: 13,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  activityCard: {
-    marginHorizontal: 20,
-    height: 190,
-    borderRadius: 20,
-    overflow: 'hidden',
-    position: 'relative',
-    ...SHADOWS.md,
-  },
-  activityImage: {
-    width: '100%',
-    height: '100%',
-  },
-  activityGradient: {
-    ...StyleSheet.absoluteFill,
-  },
-  activityBadge: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  activityBadgeText: {
-    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+    color: COLORS.secondaryPurple,
   },
-  activityContent: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-  },
-  activityTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  activityMetaRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginBottom: 10,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    color: 'rgba(255,255,255,0.9)',
+  feedCountText: {
     fontSize: 12,
-  },
-  activityFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  hostRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  hostAvatar: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-  hostName: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    color: COLORS.textLight,
     fontWeight: '600',
-  },
-  joinBtn: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 14,
-  },
-  joinBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
   postCard: {
     backgroundColor: '#FFFFFF',
-    marginHorizontal: 20,
-    marginTop: 14,
     borderRadius: 20,
     padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     ...SHADOWS.sm,
   },
-  postHeader: {
+  authorRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     marginBottom: 12,
   },
   authorInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  authorAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    flex: 1,
   },
   authorName: {
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  postMetaText: {
+    fontSize: 11,
+    color: COLORS.textLight,
+    marginTop: 2,
+  },
+  postBodyText: {
+    fontSize: 14,
+    color: COLORS.textDark,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  postImageContainer: {
+    height: 220,
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#FAF8F5',
+    marginBottom: 12,
+  },
+  postImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  venueActionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAF8F5',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 12,
+  },
+  venueInfoCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: 8,
+  },
+  venueNameText: {
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.textDark,
   },
-  postSubRow: {
+  ruDiCungBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  postTime: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  dot: {
-    fontSize: 10,
-    color: COLORS.textLight,
-  },
-  postLocation: {
-    fontSize: 12,
-    color: COLORS.textMedium,
-  },
-  postContentText: {
-    fontSize: 14,
-    color: COLORS.textDark,
-    lineHeight: 21,
-    marginBottom: 8,
-  },
-  hashtagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  hashtagText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  galleryContainer: {
-    flexDirection: 'row',
-    height: 180,
-    borderRadius: 14,
-    overflow: 'hidden',
-    gap: 6,
-    marginBottom: 12,
-  },
-  galleryMainImage: {
-    flex: 2,
-    height: '100%',
-  },
-  gallerySubColumn: {
-    flex: 1,
-    gap: 6,
-  },
-  gallerySubImage: {
-    flex: 1,
-    width: '100%',
-  },
-  viviChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F3FF',
+    backgroundColor: COLORS.primaryCoral,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    marginBottom: 12,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#E9E4FF',
+    paddingVertical: 6,
+    borderRadius: 14,
+    ...SHADOWS.glow,
   },
-  viviChipText: {
+  ruDiCungText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    color: COLORS.primaryDark,
-    flex: 1,
-    fontWeight: '500',
+    fontWeight: '700',
   },
-  actionsBar: {
+  postFooter: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-around',
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: COLORS.border,
   },
-  actionItem: {
+  footerActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -929,210 +604,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   actionNum: {
-    fontSize: 13,
-    color: COLORS.textMedium,
-    fontWeight: '600',
-  },
-  floatingViViBtn: {
-    position: 'absolute',
-    right: 20,
-    bottom: 80,
-    ...SHADOWS.glow,
-  },
-  floatingViViGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 24,
-    gap: 6,
-  },
-  floatingViViText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  recruitBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  recruitBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#D97706',
-  },
-  feedCompanionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  feedCompanionsText: {
-    fontSize: 12,
-    color: COLORS.textMedium,
-    fontWeight: '600',
-  },
-  feedCompanionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  feedCompanionAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-  },
-  feedCompanionName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.primaryDark,
-  },
-  feedVenueCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 10,
-  },
-  feedVenuePlatformBadge: {
-    backgroundColor: '#059669',
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  feedVenuePlatformText: {
-    color: '#FFF',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  feedVenueName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textDark,
-  },
-  feedVenueAddress: {
-    fontSize: 11,
-    color: COLORS.textMedium,
-  },
-  recruitmentTripCard: {
-    backgroundColor: '#FAF5FF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E9D5FF',
-    padding: 12,
-    marginBottom: 10,
-  },
-  recruitmentTripTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  recruitmentTripTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.primary,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  recruitmentTripTagText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  recruitmentSlotsText: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.primaryDark,
-  },
-  recruitmentTripDetails: {
-    gap: 4,
-    marginBottom: 10,
-  },
-  tripDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  tripDetailText: {
-    fontSize: 12,
-    color: COLORS.textDark,
-    fontWeight: '500',
-  },
-  applyRecruitBtn: {
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  applyRecruitGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  applyRecruitText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  videoCardContainer: {
-    position: 'relative',
-    height: 220,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    marginBottom: 12,
-  },
-  feedVideo: {
-    width: '100%',
-    height: '100%',
-  },
-  soundToggleBtn: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  soundToggleText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  videoDurationBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  videoDurationText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '600',
+    color: COLORS.textLight,
   },
 });

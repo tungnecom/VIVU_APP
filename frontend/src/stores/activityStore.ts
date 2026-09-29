@@ -8,6 +8,7 @@ interface ActivityState {
   currentActivity: any;
   isJoined: boolean;
   loading: boolean;
+  error: string | null;
 
   // Actions
   fetchActivities: (city?: string, category?: string) => Promise<void>;
@@ -21,6 +22,7 @@ export const useActivityStore = create<ActivityState>((set) => ({
   currentActivity: MOCK_ACTIVITY as any,
   isJoined: false,
   loading: false,
+  error: null,
 
   fetchActivities: async (city = '', category = '') => {
     set({ loading: true });

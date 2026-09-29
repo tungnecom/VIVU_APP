@@ -1,20 +1,9 @@
-import { useRouter } from 'expo-router';
 import React from 'react';
 import { ProfileScreen } from '../../screens/profile/ProfileScreen';
-import { ScreenKey } from '../../types';
+import { useAppNavigation } from '../../hooks/useAppNavigation';
 
 export default function ProfileRoute() {
-  const router = useRouter();
+  const { navigateTo } = useAppNavigation();
 
-  const handleNavigate = (screen: ScreenKey, params?: any) => {
-    if (screen === 'privacy_setting') {
-      router.push('/privacy_setting');
-    } else if (screen === 'welcome') {
-      router.replace('/login');
-    } else {
-      console.log('Navigate to:', screen);
-    }
-  };
-
-  return <ProfileScreen onNavigate={handleNavigate} />;
+  return <ProfileScreen onNavigate={navigateTo as any} />;
 }

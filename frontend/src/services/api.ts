@@ -506,6 +506,60 @@ export class ApiClient {
       };
     }
   }
+
+
+
+  /**
+   * 23. Bình luận bài viết
+   */
+  public static async createComment(postId: string, text: string, token: string) {
+    try {
+      const res = await fetchWithTimeout(`${this.baseUrl}/api/feed/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e?.message };
+    }
+  }
+
+  /**
+   * 24. Lấy thông tin hồ sơ
+   */
+  public static async getProfile(userId: string, token: string) {
+    try {
+      const res = await fetchWithTimeout(`${this.baseUrl}/api/profile/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e?.message };
+    }
+  }
+
+  /**
+   * 25. Cập nhật hồ sơ cá nhân
+   */
+  public static async updateProfile(data: any, token: string) {
+    try {
+      const res = await fetchWithTimeout(`${this.baseUrl}/api/profile/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e?.message };
+    }
+  }
 }
 
 

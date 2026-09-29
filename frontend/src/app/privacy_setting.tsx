@@ -8,8 +8,12 @@ export default function PrivacySettingRoute() {
   const handleNavigate = (screen: ScreenKey) => {
     if (screen === 'home_feed' || (screen as string) === 'onboarding_complete') {
       router.replace('/(tabs)');
-    } else if (screen === 'social_level') {
-      router.back();
+    } else if (screen === 'social_level' || screen === 'profile') {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.push('/(tabs)/profile');
+      }
     } else {
       router.replace('/(tabs)');
     }
