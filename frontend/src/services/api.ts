@@ -1,9 +1,8 @@
 import { Platform } from 'react-native';
 
 // Địa chỉ backend mặc định
-// Android Emulator dùng 10.0.2.2, iOS Simulator & Web dùng localhost
-const API_BASE_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
+// Android Emulator dùng 10.0.2.2, iOS Simulator & Web dùng localhost, Thiết bị thật dùng IP LAN (qua biến môi trường EXPO_PUBLIC_API_URL)
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000');
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 1800): Promise<Response> {
   const controller = new AbortController();
@@ -28,45 +27,32 @@ export class ApiClient {
   /**
    * 1. Đăng ký tài khoản
    */
-  public static async register(identifier: string, city: string) {
+  public static async register(identifier: string, password: string = 'password123', city: string = 'Đà Nẵng') {
     try {
       const res = await fetchWithTimeout(`${this.baseUrl}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password: 'password123', city }),
+        body: JSON.stringify({ identifier, password, city }),
       });
       return await res.json();
-    } catch {
-      return { success: true, message: 'Đăng ký thành công!' };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Lỗi kết nối' };
     }
   }
 
   /**
    * 2. Đăng nhập
    */
-  public static async login(identifier: string) {
+  public static async login(identifier: string, password: string = 'password123') {
     try {
       const res = await fetchWithTimeout(`${this.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password: 'password123' }),
+        body: JSON.stringify({ identifier, password }),
       });
       return await res.json();
-    } catch {
-      return {
-        success: true,
-        data: {
-          token: 'vivu_token_' + Date.now(),
-          user: {
-            id: 'u_' + Date.now(),
-            name: identifier.split('@')[0] || 'VIVU Explorer',
-            identifier,
-            phone: identifier,
-            city: 'Đà Nẵng',
-            trustScore: 94,
-          },
-        },
-      };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Lỗi kết nối' };
     }
   }
 
@@ -146,6 +132,106 @@ export class ApiClient {
       return await res.json();
     } catch {
       return { success: false, data: [] };
+    }
+  }
+
+  /**
+   * 6.1. Lấy danh sách các kèo đang mở
+   */
+  public static async getActivities(city = '', category = '', status = 'OPEN') {
+    try {
+      let url = `${this.baseUrl}/api/activities?status=${status}`;
+      if (city) url += `&city=${encodeURIComponent(city)}`;
+      if (category) url += `&category=${encodeURIComponent(category)}`;
+      const res = await fetch(url);
+      return await res.json();
+    } catch (error: any) {
+      return { success: false, message: error?.message, data: [] };
+    }
+  }
+
+  /**
+   * 6.2. Tạo kèo mới
+   */
+  public static async createActivity(data: any, token: string) {
+    try {
+      const res = await fetchWithTimeout(`${this.baseUrl}/api/activities`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(data),
+      });
+      return await res.json();
+    } catch (error: any) {
+      return { success: false, message: error?.message };
+    }
+  }
+
+  /**
+   * 6.3. Lấy chi tiết kèo
+   */
+  public static async getActivityDetail(id: string) {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/activities/${id}`);
+      return await res.json();
+    } catch (error: any) {
+      return { success: false, message: error?.message };
+    }
+  }
+
+  /**
+   * 6.4. Yêu cầu tham gia kèo
+   */
+  public static async joinActivity(id: string, token: string, message = '') {
+    try {
+      const res = await fetchWithTimeout(`${this.baseUrl}/api/activities/${id}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ message }),
+      });
+      return await res.json();
+    } catch (error: any) {
+      return { success: false, message: error?.message };
+    }
+  }
+
+  /**
+   * 6.5. Lấy danh sách yêu cầu tham gia (Dành cho host)
+   */
+  public static async getActivityRequests(id: string, token: string) {
+    try {
+      const res = await fetch(`${this.baseUrl}/api/activities/${id}/requests`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+      });
+      return await res.json();
+    } catch (error: any) {
+      return { success: false, message: error?.message, data: [] };
+    }
+  }
+
+  /**
+   * 6.6. Duyệt hoặc từ chối yêu cầu tham gia
+   */
+  public static async respondToJoinRequest(activityId: string, requestId: string, action: 'ACCEPT' | 'DECLINE', token: string) {
+    try {
+      const res = await fetchWithTimeout(`${this.baseUrl}/api/activities/${activityId}/requests/${requestId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action }),
+      });
+      return await res.json();
+    } catch (error: any) {
+      return { success: false, message: error?.message };
     }
   }
 
@@ -304,12 +390,15 @@ export class ApiClient {
   /**
    * 17. Gửi mã SMS OTP về số điện thoại thật
    */
-  public static async sendSmsOtp(phone: string) {
+  public static async sendSmsOtp(phone: string, token: string) {
     const fallbackOtp = Math.floor(100000 + Math.random() * 900000).toString();
     try {
       const res = await fetchWithTimeout(`${this.baseUrl}/api/auth/send-otp`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ phone }),
       });
       const data = await res.json();
@@ -320,12 +409,10 @@ export class ApiClient {
         message: data?.message || `Mã OTP [${code}] đã được gửi về số điện thoại ${phone}!`,
         countdownSeconds: 60,
       };
-    } catch {
+    } catch (error: any) {
       return {
-        success: true,
-        code: fallbackOtp,
-        message: `Mã xác thực OTP gửi về ${phone}: [${fallbackOtp}]`,
-        countdownSeconds: 60,
+        success: false,
+        message: error?.message || `Lỗi kết nối, không thể gửi OTP.`,
       };
     }
   }
@@ -333,19 +420,21 @@ export class ApiClient {
   /**
    * 18. Xác thực mã OTP và nhận thưởng +20 Điểm Uy Tín
    */
-  public static async verifySmsOtp(code: string, phone?: string) {
+  public static async verifySmsOtp(code: string, phone: string, token: string) {
     try {
       const res = await fetchWithTimeout(`${this.baseUrl}/api/auth/verify-otp`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ code, phone }),
       });
       return await res.json();
-    } catch {
+    } catch (error: any) {
       return {
-        success: true,
-        message: 'Xác thực OTP thành công!',
-        data: { verified: true, trustScoreBonus: 20 },
+        success: false,
+        message: error?.message || 'Lỗi xác thực OTP',
       };
     }
   }

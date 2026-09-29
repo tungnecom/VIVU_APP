@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "vivu",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vivu.app",
@@ -37,6 +38,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-router",
       "expo-font",
       "expo-video"
     ]

@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBar } from '../../components/BottomTabBar';
-import { CURRENT_USER } from '../../constants/mockData';
+
 import { COLORS, SHADOWS } from '../../constants/theme';
 import { ApiClient } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
@@ -156,7 +156,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
   const displayInterests =
     selectedInterests && selectedInterests.length > 0
       ? selectedInterests
-      : CURRENT_USER.interests;
+      : ['Du lịch', 'Cafe', 'Khám phá'];
 
   return (
     <View style={styles.container}>
@@ -218,7 +218,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
           </View>
 
           {/* User Name & Bio */}
-          <Text style={styles.userName}>{user?.name || CURRENT_USER.name}</Text>
+          <Text style={styles.userName}>{user?.name || 'Người dùng'}</Text>
 
           <View style={styles.verifiedRow}>
             <Ionicons name="shield-checkmark" size={14} color="#059669" />
@@ -252,17 +252,17 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
           {/* Counts Bar */}
           <View style={styles.statsBar}>
             <View style={styles.statCol}>
-              <Text style={styles.statNum}>{CURRENT_USER.postsCount || 12}</Text>
+              <Text style={styles.statNum}>12</Text>
               <Text style={styles.statLabel}>Bài viết</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statNum}>{CURRENT_USER.activitiesCount || 16}</Text>
+              <Text style={styles.statNum}>16</Text>
               <Text style={styles.statLabel}>Chuyến đi</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statNum}>{CURRENT_USER.friendsCount || 148}</Text>
+              <Text style={styles.statNum}>148</Text>
               <Text style={styles.statLabel}>Cạ cứng</Text>
             </View>
           </View>
@@ -406,7 +406,7 @@ export const ProfileScreen: React.FC<ProfileProps> = ({ onNavigate }) => {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeading}>Sở thích du lịch & khám phá</Text>
           <View style={styles.interestWrap}>
-            {displayInterests.map((interest, i) => (
+            {displayInterests.map((interest: string, i: number) => (
               <View key={i} style={styles.interestChip}>
                 <Ionicons name="sparkles" size={12} color={COLORS.primary} />
                 <Text style={styles.interestText}>{interest}</Text>

@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { redisCache } from '../../config/redis';
+import { prisma } from '../../config/database';
 import { authenticateJwt } from '../../middlewares/auth.middleware';
 import { validateRequest } from '../../middlewares/validate.middleware';
 
@@ -24,18 +25,12 @@ const createPostSchema = z.object({
         platformSource: z.string().optional(),
       })
       .optional(),
-    taggedCompanions: z
-      .array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          avatar: z.string(),
-        })
-      )
-      .optional(),
+    taggedCompanions: z.any().optional(),
     isRecruitment: z.boolean().optional(),
+    isWish: z.boolean().optional(),
     recruitmentSlots: z.number().optional(),
     recruitmentBudget: z.string().optional(),
+    displayDuration: z.number().optional(),
   }),
 });
 
@@ -54,93 +49,58 @@ feedRouter.get('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const posts = [
-    {
-      id: 'p3_video',
-      author: {
-        id: 'u3',
-        name: 'Lan Anh (VIVU VIP)',
-        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-        location: 'Sơn Trà, Đà Nẵng',
-        trustScore: 96,
+  let dbPosts: any[] = [];
+  try {
+    dbPosts = await prisma.post.findMany({
+      where: {
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } }
+        ]
       },
-      timeAgo: '1 giờ trước',
-      content:
-        'Hoàng hôn buông xuống trên vịnh Sơn Trà Marina đẹp như Santorini thu nhỏ 🌊☕ Bật loa lên để nghe trọn tiếng sóng biển và gió đại dương nha mọi người!',
-      images: [
-        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
-      ],
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      videoDuration: 15,
-      hashtags: ['#SonTraMarina', '#VideoDuLich', '#ShopeeFoodTop', '#AmThanhThuc'],
-      likes: 246,
-      commentsCount: 38,
-      sharesCount: 19,
-      taggedVenue: {
-        id: 'dn_sontra_marina',
-        name: 'Sơn Trà Marina Cafe & Lounge',
-        address: 'Đường Hồ Xanh, Bán đảo Sơn Trà, Đà Nẵng',
-        platformSource: 'SHOPEEFOOD',
+      include: {
+        author: true
       },
-      isRecruitment: false,
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (error) {
+    console.error("Prisma Error fetching posts:", error);
+  }
+
+  // Format cho frontend
+  const posts = dbPosts.map(p => ({
+    id: p.id,
+    author: {
+      id: p.author?.id || 'u_me',
+      name: p.author?.fullName || p.author?.identifier || 'Người dùng',
+      avatar: p.author?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      location: p.city || 'Đà Nẵng',
+      trustScore: p.author?.trustScore || 90,
     },
-    {
-      id: 'p1',
-      author: {
-        id: 'u1',
-        name: 'Minh Thư',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-        location: 'Hải Châu, Đà Nẵng',
-        trustScore: 94,
-      },
-      timeAgo: '2 giờ trước',
-      content:
-        'Tuyển cạ cùng lượn Food Tour Đà Nẵng cuối tuần: Bánh tráng thịt heo Đại Lộc, Bún mắm nêm, Chè sầu Liên. Ai đi cùng đăng ký ngay nhé! 🍲🛵',
-      images: [
-        'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600',
-        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600',
-      ],
-      hashtags: ['#CafeĐàNẵng', '#DuLịch', '#GrabFoodReview'],
-      likes: 128,
-      commentsCount: 22,
-      sharesCount: 9,
-      taggedVenue: {
-        id: 'dn_dacsan_trang',
-        name: 'Đặc Sản Trần - Bánh Tráng Cuốn',
-        address: '04 Lê Duẩn, Hải Châu, Đà Nẵng',
-        platformSource: 'GRABFOOD',
-      },
-      isRecruitment: true,
-      recruitmentSlots: 4,
-      recruitmentJoined: 2,
-      activitySnippet: {
-        location: 'Hải Châu, Đà Nẵng',
-        time: 'Thứ 7, 18:00 - 21:00',
-        slots: '2/4 người',
-        budget: '150k - 200k / người',
-      },
-    },
-    {
-      id: 'p2',
-      author: {
-        id: 'u2',
-        name: 'Quang Anh',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-        location: 'Sơn Trà, Đà Nẵng',
-        trustScore: 88,
-      },
-      timeAgo: '4 giờ trước',
-      content:
-        'Chiều nay chạy xe lên đỉnh Bàn Cờ đón hoàng hôn săn mây cực đã anh em ơi! Ai đi cùng không 16h30 xuất phát chân núi nhé! 🛵🌄',
-      images: [
-        'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600',
-      ],
-      hashtags: ['#PhượtSơnTrà', '#HoàngHôn', '#ViVuĐàNẵng'],
-      likes: 95,
-      commentsCount: 14,
-      sharesCount: 5,
-    },
-  ];
+    timeAgo: 'Mới đây', // Có thể dùng date-fns để tính toán
+    content: p.content,
+    images: p.images,
+    hashtags: p.hashtags,
+    likes: p.likesCount,
+    commentsCount: p.commentsCount,
+    sharesCount: 0,
+    taggedVenue: p.venueName ? {
+      name: p.venueName,
+      address: p.city,
+      latitude: p.locationLat,
+      longitude: p.locationLng
+    } : undefined,
+    isRecruitment: p.isRecruitment,
+    isWish: p.isWish,
+    recruitmentSlots: p.slots,
+    recruitmentJoined: 1,
+    activitySnippet: p.targetTime ? {
+      location: p.venueName || p.city,
+      time: p.targetTime,
+      slots: p.slots ? `${p.slots} người` : undefined,
+      budget: p.budget,
+    } : undefined,
+  }));
 
   await redisCache.set(cacheKey, JSON.stringify(posts), 60);
 
@@ -168,38 +128,79 @@ feedRouter.post(
       taggedVenue,
       taggedCompanions,
       isRecruitment,
+      isWish,
       recruitmentSlots,
       recruitmentBudget,
+      displayDuration,
     } = req.body;
 
+    // Resolve author (fallback to first user if auth doesn't provide valid DB user)
+    let authorId = req.user?.userId;
+    const authorExists = await prisma.user.findUnique({ where: { id: authorId } });
+    if (!authorExists) {
+      const fallbackUser = await prisma.user.findFirst();
+      authorId = fallbackUser?.id;
+    }
+    
+    if (!authorId) {
+      return res.status(400).json({ success: false, message: 'No valid user found to author post' });
+    }
+
+    const expiresAt = displayDuration && displayDuration > 0 
+      ? new Date(Date.now() + displayDuration * 60000) 
+      : null;
+
+    let savedPost = null;
+    try {
+      savedPost = await prisma.post.create({
+        data: {
+          authorId,
+          content: content || '',
+          images: images || [],
+          hashtags: hashtags || [],
+          isRecruitment: !!isRecruitment,
+          isWish: !!isWish,
+          expiresAt,
+          locationLat: taggedVenue?.latitude || null,
+          locationLng: taggedVenue?.longitude || null,
+          venueName: taggedVenue?.name || location || null,
+          targetTime: time || null,
+          budget: recruitmentBudget || null,
+          slots: recruitmentSlots ? parseInt(recruitmentSlots) : null
+        },
+        include: { author: true }
+      });
+    } catch (err) {
+      console.error("Prisma error saving post", err);
+      return res.status(500).json({ success: false, message: 'Database error' });
+    }
+
     const newPost = {
-      id: 'p_' + Date.now(),
+      id: savedPost.id,
       author: {
-        id: req.user?.userId || 'u_me',
-        name: req.user?.name || 'Tùng',
+        id: savedPost.authorId,
+        name: savedPost.author?.identifier || 'Người dùng',
         avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
         location: location || 'Đà Nẵng',
       },
       timeAgo: 'Vừa xong',
-      content,
-      images: images || [],
-      videoUrl,
-      videoDuration,
-      hashtags: hashtags || [],
+      content: savedPost.content,
+      images: savedPost.images,
+      hashtags: savedPost.hashtags,
       likes: 0,
       commentsCount: 0,
       sharesCount: 0,
       taggedVenue,
-      taggedCompanions,
-      isRecruitment: !!isRecruitment,
-      recruitmentSlots,
+      isRecruitment: savedPost.isRecruitment,
+      isWish: savedPost.isWish,
+      recruitmentSlots: savedPost.slots,
       recruitmentJoined: 1,
-      activitySnippet: location
+      activitySnippet: savedPost.targetTime
         ? {
-            location,
-            time: time || 'Hôm nay',
-            slots: slots || '4 người',
-            budget: recruitmentBudget,
+            location: savedPost.venueName || location,
+            time: savedPost.targetTime,
+            slots: savedPost.slots ? `${savedPost.slots} người` : undefined,
+            budget: savedPost.budget,
           }
         : undefined,
     };
@@ -214,3 +215,116 @@ feedRouter.post(
     });
   }
 );
+
+// Tương tác: Like bài viết
+feedRouter.post('/posts/:id/like', authenticateJwt, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const postId = String(req.params.id);
+    
+    // Đơn giản hóa MVP: chỉ tăng likesCount
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { likesCount: { increment: 1 } },
+    });
+
+    res.json({ success: true, likesCount: updated.likesCount });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi hệ thống' });
+  }
+});
+
+// Tương tác: Lấy danh sách bình luận
+feedRouter.get('/posts/:id/comments', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const postId = String(req.params.id);
+    const comments = await prisma.comment.findMany({
+      where: { postId },
+      include: { author: { include: { profile: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({
+      success: true,
+      data: comments.map(c => ({
+        id: c.id,
+        content: c.content,
+        createdAt: c.createdAt,
+        author: {
+          id: c.author.id,
+          name: c.author.profile?.fullName,
+          avatarUrl: c.author.profile?.avatarUrl,
+        }
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi hệ thống' });
+  }
+});
+
+// Tương tác: Viết bình luận
+feedRouter.post('/posts/:id/comments', authenticateJwt, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const postId = String(req.params.id);
+    const authorId = req.user!.userId;
+    const { content } = req.body;
+
+    if (!content) {
+      res.status(400).json({ success: false, message: 'Nội dung bình luận không được trống.' });
+      return;
+    }
+
+    const comment = await prisma.$transaction(async (tx) => {
+      const cmt = await tx.comment.create({
+        data: { postId, authorId, content },
+        include: { author: { include: { profile: true } } }
+      });
+      
+      await tx.post.update({
+        where: { id: postId },
+        data: { commentsCount: { increment: 1 } }
+      });
+
+      return cmt;
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt,
+        author: {
+          id: comment.author.id,
+          name: comment.author.profile?.fullName,
+          avatarUrl: comment.author.profile?.avatarUrl,
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi hệ thống' });
+  }
+});
+
+// Lưu bài viết (Saved Items)
+feedRouter.post('/posts/:id/save', authenticateJwt, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const postId = String(req.params.id);
+    const userId = req.user!.userId;
+
+    const existing = await prisma.savedItem.findUnique({
+      where: { userId_targetType_targetId: { userId, targetType: 'POST', targetId: postId } }
+    });
+
+    if (existing) {
+      await prisma.savedItem.delete({ where: { id: existing.id } });
+      res.json({ success: true, message: 'Đã bỏ lưu bài viết', saved: false });
+    } else {
+      await prisma.savedItem.create({
+        data: { userId, targetType: 'POST', targetId: postId }
+      });
+      res.json({ success: true, message: 'Đã lưu bài viết', saved: true });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi hệ thống' });
+  }
+});

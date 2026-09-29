@@ -49,6 +49,7 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
   const [departureTime, setDepartureTime] = useState('Thứ 7, 18:00');
   const [slotsCount, setSlotsCount] = useState('4 người');
   const [budgetEstimate, setBudgetEstimate] = useState('150k - 200k / người');
+  const [displayDuration, setDisplayDuration] = useState('24 giờ');
 
   // Wish specifics
   const [wishDestination, setWishDestination] = useState('Đèo Hải Vân & Vịnh Lăng Cô');
@@ -250,6 +251,20 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
     // 1. Optimistic Update immediately in client store
     addPost(newPost);
 
+    let durationMinutes = 24 * 60;
+    if (displayDuration) {
+       const lower = displayDuration.toLowerCase();
+       if (lower.includes('phút')) {
+         durationMinutes = parseInt(lower) || 30;
+       } else if (lower.includes('giờ')) {
+         durationMinutes = (parseInt(lower) || 24) * 60;
+       } else if (lower.includes('ngày')) {
+         durationMinutes = (parseInt(lower) || 1) * 24 * 60;
+       } else {
+         durationMinutes = parseInt(lower) || 24 * 60;
+       }
+    }
+
     // 2. Synchronize to Backend asynchronously
     ApiClient.createPost(
       {
@@ -269,12 +284,32 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
         isWish: newPost.isWish,
         wishDestination: newPost.wishDestination,
         wishDate: newPost.wishDate,
+        displayDuration: durationMinutes,
       },
       token || undefined
     ).catch(() => {});
 
-    // 3. Immediately exit and navigate to Home Feed (User requested instant exit without blocking alert)
-    onNavigate('home_feed');
+    if (postMode === 'recruitment' && token) {
+      ApiClient.createActivity({
+        title: content.trim() || `Đi ${targetLocName} cùng mình nhé!`,
+        category: 'Khám phá',
+        city: selectedCity,
+        date: departureTime.split(',')[0] || 'Hôm nay',
+        time: departureTime.split(',')[1]?.trim() || '18:00',
+        location: targetLocName,
+        maxCount: parseInt(slotsCount) || 4,
+        image: images[0] || 'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=800',
+        description: content.trim() || `Tuyển cạ cùng vi vu tại ${targetLocName}`,
+        tags: hashtags
+      }, token).catch(() => {});
+    }
+
+    // 3. Immediately exit and navigate to Home Feed or Map
+    if (postMode === 'recruitment') {
+      onNavigate('map');
+    } else {
+      onNavigate('home_feed');
+    }
   };
 
   // Filter venues by search
@@ -475,6 +510,17 @@ export const CreatePostScreen: React.FC<CreatePostProps> = ({ onNavigate }) => {
                 value={budgetEstimate}
                 onChangeText={setBudgetEstimate}
                 placeholder="VD: 150k - 200k / người"
+              />
+            </View>
+
+            <View style={styles.recruitFieldRow}>
+              <Ionicons name="timer-outline" size={16} color={COLORS.textMedium} />
+              <Text style={styles.recruitFieldLabel}>Tồn tại trên map:</Text>
+              <TextInput
+                style={styles.recruitInput}
+                value={displayDuration}
+                onChangeText={setDisplayDuration}
+                placeholder="VD: 2 giờ, 24 giờ..."
               />
             </View>
           </View>

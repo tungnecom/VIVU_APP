@@ -1,18 +1,60 @@
 import { create } from 'zustand';
 import { MOCK_ACTIVITY } from '../constants/mockData';
+import { ApiClient } from '../services/api';
 import { ActivityItem } from '../types';
 
 interface ActivityState {
-  currentActivity: ActivityItem;
+  activities: any[];
+  currentActivity: any;
   isJoined: boolean;
+  loading: boolean;
 
   // Actions
+  fetchActivities: (city?: string, category?: string) => Promise<void>;
+  fetchActivityDetail: (id: string) => Promise<void>;
+  joinActivity: (id: string, token: string, message?: string) => Promise<any>;
   toggleJoinActivity: () => void;
 }
 
 export const useActivityStore = create<ActivityState>((set) => ({
-  currentActivity: MOCK_ACTIVITY,
+  activities: [],
+  currentActivity: MOCK_ACTIVITY as any,
   isJoined: false,
+  loading: false,
+
+  fetchActivities: async (city = '', category = '') => {
+    set({ loading: true });
+    try {
+      const res = await ApiClient.getActivities(city, category);
+      if (res?.success && res.data) {
+        set({ activities: res.data });
+      }
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchActivityDetail: async (id: string) => {
+    set({ loading: true });
+    try {
+      const res = await ApiClient.getActivityDetail(id);
+      if (res?.success && res.data) {
+        set({ currentActivity: res.data });
+      }
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  joinActivity: async (id: string, token: string, message = '') => {
+    set({ loading: true });
+    try {
+      const res = await ApiClient.joinActivity(id, token, message);
+      return res;
+    } finally {
+      set({ loading: false });
+    }
+  },
 
   toggleJoinActivity: () =>
     set((state) => {

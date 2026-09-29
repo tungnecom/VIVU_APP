@@ -28,10 +28,13 @@ import {
 } from '../../services/fullVietnamData';
 import { useAuthStore } from '../../stores/authStore';
 import { useFeedStore } from '../../stores/feedStore';
+import { useActivityStore } from '../../stores/activityStore';
 import { ScreenKey } from '../../types';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { MapViewComponent } from '../../components/MapViewComponent';
 
 interface MapScreenProps {
-  onNavigate: (screen: ScreenKey) => void;
+  onNavigate: (screen: ScreenKey, params?: any) => void;
 }
 
 export type CategoryFilter =
@@ -97,6 +100,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
   // Navigation & User State
   const currentUser = useAuthStore((s) => s.user);
   const feedPosts = useFeedStore((s) => s.posts);
+  const activities = useActivityStore((s) => s.activities);
+  const { isDesktop, isWeb } = useResponsiveLayout();
 
   // Map Navigation & Layer State
   const [mapLayer, setMapLayer] = useState<'standard' | 'satellite' | 'night'>('standard');
@@ -126,6 +131,29 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
 
   // Loading States
   const [isLoadingMap, setIsLoadingMap] = useState(false);
+  const [apiPlaces, setApiPlaces] = useState<any[]>([]);
+  const [userAddress, setUserAddress] = useState<string>('Vị trí hiện tại của bạn');
+  const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number; zoom?: number } | null>(null);
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/places?limit=500')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          const normalized = data.data.map((p: any) => ({
+            ...p,
+            desc: p.description,
+            province: p.city,
+            district: 'Đà Nẵng',
+            categoryType: p.category === 'Cafe' ? 'cafe' : p.category === 'Nhà hàng' ? 'food' : p.category === 'Bar/Pub' ? 'entertainment' : 'tourism',
+            phone: '0123456789',
+            facilities: ['Wifi', 'Chỗ để xe']
+          }));
+          setApiPlaces(normalized);
+        }
+      })
+      .catch(err => console.error('Error fetching API places:', err));
+  }, []);
 
   // Selected Place & Wish State
   const [selectedPlace, setSelectedPlace] = useState<NationalPlace | null>(MASTER_NATIONWIDE_PLACES[0]);
@@ -202,10 +230,28 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
             accuracy: Location.Accuracy.Balanced,
           });
           if (isMounted && loc?.coords) {
+            const lat = loc.coords.latitude;
+            const lon = loc.coords.longitude;
             setUserLocation({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
+              latitude: lat,
+              longitude: lon,
             });
+            // Reverse Geocoding using Nominatim (works seamlessly on Web without API keys)
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
+              headers: { 'User-Agent': 'VivuApp/1.0 (local dev)' }
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.display_name && isMounted) {
+                // Rút gọn địa chỉ
+                const addr = data.address;
+                const road = addr.road || addr.pedestrian || addr.suburb || '';
+                const city = addr.city || addr.town || addr.county || addr.state || '';
+                const formatted = [road, city].filter(Boolean).join(', ');
+                setUserAddress(formatted || data.display_name.substring(0, 40) + '...');
+              }
+            })
+            .catch(() => {});
           }
         }
       } catch {
@@ -234,6 +280,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
           setUserLocation({
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
+          });
+          setMapCenter({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            zoom: 15
           });
           showToast(`📍 Đã định vị vị trí của bạn (${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)})`);
         }
@@ -299,16 +350,31 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
         destination: p.taggedVenue?.name || p.wishDestination || p.author.location || 'Điểm hẹn vi vu',
         dateText: p.wishDate || p.activitySnippet?.time || 'Hôm nay',
         note: p.content,
-        latitude: p.taggedVenue?.latitude || 16.06 + idx * 0.01,
-        longitude: p.taggedVenue?.longitude || 108.22 + idx * 0.01,
+        latitude: p.taggedVenue?.latitude || userLocation.latitude + (idx * 0.0001),
+        longitude: p.taggedVenue?.longitude || userLocation.longitude + (idx * 0.0001),
         pinTop: `${42 + ((idx * 11) % 34)}%`,
         pinLeft: `${32 + ((idx * 15) % 46)}%`,
       })),
-  ], [currentUser, feedPosts]);
+    // Dynamically synchronized from activities (W7)
+    ...activities.map((a: any, idx: number) => ({
+        id: `activity_${a.id}`,
+        userName: a.host?.name || 'Vivu User',
+        userAvatar: a.host?.avatarUrl || a.host?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        trustScore: a.host?.trustScore || 85,
+        destination: a.location || a.city || a.title,
+        dateText: `${a.date} • ${a.time}`,
+        note: a.title,
+        latitude: userLocation.latitude + (idx * 0.0001), // mock lat for now
+        longitude: userLocation.longitude + (idx * 0.0001), // mock lng for now
+        pinTop: `${45 + ((idx * 7) % 30)}%`,
+        pinLeft: `${35 + ((idx * 9) % 40)}%`,
+    })),
+  ], [currentUser, feedPosts, userLocation, activities]);
 
   // Filter places based on search, category, province, and advanced filter criteria
   const displayedPlaces = useMemo(() => {
-    return MASTER_NATIONWIDE_PLACES
+    const dataSource = apiPlaces.length > 0 ? apiPlaces : MASTER_NATIONWIDE_PLACES;
+    return dataSource
       .filter((item) => {
         // 1. Province filter
         if (selectedProvince && !item.province.toLowerCase().includes(selectedProvince.toLowerCase())) {
@@ -383,7 +449,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
   // Nearby places around the currently selected place (sorted by distance from selected place)
   const nearbyPlaces = useMemo(() => {
     if (!selectedPlace) return [];
-    return MASTER_NATIONWIDE_PLACES
+    const dataSource = apiPlaces.length > 0 ? apiPlaces : MASTER_NATIONWIDE_PLACES;
+    return dataSource
       .filter((p) => p.id !== selectedPlace.id)
       .map((p) => {
         const distFromCurrent = calculateHaversineDistance(
@@ -576,138 +643,58 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
     p.name.toLowerCase().includes(provinceSearchQuery.toLowerCase().trim())
   );
 
+  const mapMarkers = useMemo(() => {
+    const places = activeCategory !== 'wishes' ? displayedPlaces.map(p => ({
+      id: p.id,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      title: p.name,
+      description: `${p.rating} ★ - ${p.category}`,
+      color: getCategoryConfig(p.categoryType).color,
+      onPress: () => {
+        setSelectedPlace(p);
+        setSelectedWish(null);
+        setIsSheetExpanded(false);
+      }
+    })) : [];
+
+    const wishes = (activeCategory === 'all' || activeCategory === 'wishes') ? liveWishes.map(w => ({
+      id: w.id,
+      latitude: w.latitude,
+      longitude: w.longitude,
+      title: w.destination,
+      description: `@${w.userName} - ${w.dateText}`,
+      color: '#EF4444',
+      onPress: () => {
+        setSelectedWish(w);
+        setSelectedPlace(null);
+        setIsSheetExpanded(false);
+      }
+    })) : [];
+
+    return [...places, ...wishes];
+  }, [displayedPlaces, liveWishes, activeCategory]);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDesktop && { flexDirection: 'row-reverse' }]}>
       {/* 1. MAP CANVAS VIEWPORT */}
-      <View style={styles.mapArea}>
-        {/* Map Background Layer */}
-        <Image
-          source={{
-            uri:
-              mapLayer === 'satellite'
-                ? 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=1600'
-                : mapLayer === 'night'
-                ? 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=1600'
-                : 'https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?w=1600',
+      <View style={[styles.mapArea, isDesktop && { position: 'relative', flex: 1 }]}>
+        <MapViewComponent
+          style={StyleSheet.absoluteFill}
+          markers={mapMarkers}
+          centerCoordinate={mapCenter}
+          initialRegion={{
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05
           }}
-          style={[styles.mapImage, { transform: [{ scale: zoomScale }] }]}
-          resizeMode="cover"
         />
-
-        {/* Map Vector Grid & Landmarks Simulation Overlay */}
-        <View style={styles.mapVectorGridOverlay} pointerEvents="none">
-          <View style={styles.mapRiverLine} />
-          <View style={styles.mapAvenueHorizontal} />
-          <View style={styles.mapAvenueVertical} />
-          <View style={styles.mapDistrictLabelWrap}>
-            <Text style={styles.mapDistrictLabel}>QUẬN HẢI CHÂU</Text>
-          </View>
-          <View style={[styles.mapDistrictLabelWrap, { top: '22%', left: '60%' }]}>
-            <Text style={styles.mapDistrictLabel}>BÁN ĐẢO SƠN TRÀ</Text>
-          </View>
-        </View>
-
-        {/* GPS Location Beacon (Current User) */}
-        <View style={styles.userGpsPin}>
-          <Animated.View
-            style={[
-              styles.userGpsHalo,
-              {
-                transform: [{ scale: pulseAnim }],
-                opacity: pulseAnim.interpolate({
-                  inputRange: [1, 1.4],
-                  outputRange: [0.6, 0.1],
-                }),
-              },
-            ]}
-          />
-          <View style={styles.userGpsDot}>
-            <View style={styles.userGpsInnerDot} />
-          </View>
-          <View style={styles.userGpsBadge}>
-            <Text style={styles.userGpsBadgeText}>Bạn ở đây</Text>
-          </View>
-        </View>
-
-        {/* CATEGORY PINS ON MAP */}
-        {activeCategory !== 'wishes' &&
-          displayedPlaces.map((place) => {
-            const isSelected = selectedPlace?.id === place.id;
-            const config = getCategoryConfig(place.categoryType);
-
-            return (
-              <TouchableOpacity
-                key={place.id}
-                style={[
-                  styles.pinWrapper,
-                  { top: place.pinTop as any, left: place.pinLeft as any },
-                  isSelected && styles.pinWrapperSelected,
-                ]}
-                onPress={() => {
-                  setSelectedPlace(place);
-                  setSelectedWish(null);
-                  setIsSheetExpanded(false);
-                }}
-                activeOpacity={0.85}
-              >
-                <View
-                  style={[
-                    styles.pinBadge,
-                    { backgroundColor: config.color },
-                    isSelected && styles.pinBadgeActive,
-                  ]}
-                >
-                  <Ionicons name={config.icon as any} size={13} color="#FFFFFF" />
-                  <Text style={styles.pinText} numberOfLines={1}>
-                    {place.name.length > 13 ? place.name.substring(0, 13) + '…' : place.name}
-                  </Text>
-                  <View style={styles.pinRatingPill}>
-                    <Ionicons name="star" size={9} color="#FEF08A" />
-                    <Text style={styles.pinRatingText}>{place.rating.toFixed(1)}</Text>
-                  </View>
-                </View>
-                <View style={[styles.pinAnchorTriangle, { borderTopColor: config.color }]} />
-              </TouchableOpacity>
-            );
-          })}
-
-        {/* LIVE COMMUNITY WISHES PINS */}
-        {(activeCategory === 'all' || activeCategory === 'wishes') &&
-          liveWishes.map((wish) => {
-            const isSelected = selectedWish?.id === wish.id;
-            return (
-              <TouchableOpacity
-                key={wish.id}
-                style={[
-                  styles.wishPinWrapper,
-                  { top: wish.pinTop as any, left: wish.pinLeft as any },
-                  isSelected && styles.wishPinWrapperActive,
-                ]}
-                onPress={() => {
-                  setSelectedWish(wish);
-                  setSelectedPlace(null);
-                  setIsSheetExpanded(false);
-                }}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.wishSpeechBubble, isSelected && styles.wishBubbleActive]}>
-                  <Text style={styles.wishBubbleUser}>@{wish.userName}</Text>
-                  <Text style={styles.wishBubbleText} numberOfLines={1}>
-                    {wish.destination}
-                  </Text>
-                </View>
-                <View style={styles.wishAvatarBeacon}>
-                  <View style={styles.wishRadarRing} />
-                  <Image source={{ uri: wish.userAvatar }} style={styles.wishAvatar} />
-                  <View style={styles.wishOnlineDot} />
-                </View>
-              </TouchableOpacity>
-            );
-          })}
       </View>
 
       {/* 2. FLOATING TOP HEADER: SEARCH BAR + FILTER BUTTON + CATEGORIES */}
-      <View style={styles.floatingHeaderArea}>
+      <View style={[styles.floatingHeaderArea, isDesktop && { position: 'relative', top: 0, width: 400, height: '100%', backgroundColor: '#F8F9FE', zIndex: 10, elevation: 10 }]}>
+        
         {/* Search Bar Row with Filter Button */}
         <View style={styles.searchRow}>
           {/* Main Search Input */}
@@ -1067,6 +1054,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
           style={[
             styles.bottomSheetContainer,
             isSheetExpanded && styles.bottomSheetContainerExpanded,
+            isDesktop && { position: 'absolute', bottom: 0, left: 0, width: 400, borderTopLeftRadius: 0, borderTopRightRadius: 0, height: '65%', borderRightWidth: 1, borderRightColor: '#E5E7EB', zIndex: 20 }
           ]}
         >
           {/* Drag Handle & Expand Toggle Button */}
@@ -1496,7 +1484,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
 
       {/* 8. WISH PIN BOTTOM CARD (When a community wish is selected) */}
       {selectedWish && (
-        <View style={styles.wishDetailCard}>
+        <View style={[styles.wishDetailCard, isDesktop && { position: 'absolute', bottom: 20, left: 20, width: 360, zIndex: 20 }]}>
           <View style={styles.wishCardHeader}>
             <Image source={{ uri: selectedWish.userAvatar }} style={styles.wishUserAvatar} />
             <View style={{ flex: 1, marginLeft: 10 }}>
@@ -1524,10 +1512,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ onNavigate }) => {
           <View style={styles.wishActionRow}>
             <TouchableOpacity
               style={styles.wishChatBtn}
-              onPress={() => onNavigate('personal_chat')}
+              onPress={() => {
+                if (selectedWish.id.startsWith('activity_')) {
+                  const realId = selectedWish.id.replace('activity_', '');
+                  onNavigate('activity_detail' as ScreenKey, { id: realId });
+                } else {
+                  onNavigate('personal_chat' as ScreenKey);
+                }
+              }}
             >
-              <Ionicons name="chatbubble-ellipses" size={16} color="#FFFFFF" />
-              <Text style={styles.wishChatBtnText}>Nhắn tin ghép cạ ngay</Text>
+              <Ionicons name={selectedWish.id.startsWith('activity_') ? 'eye' : 'chatbubble-ellipses'} size={16} color="#FFFFFF" />
+              <Text style={styles.wishChatBtnText}>
+                {selectedWish.id.startsWith('activity_') ? 'Xem chi tiết hoạt động' : 'Nhắn tin ghép cạ ngay'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

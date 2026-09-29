@@ -58,6 +58,9 @@ import { connectDatabase } from './config/database';
 import { crawlerRouter } from './modules/crawler/crawler.routes';
 import { PlaceCrawlerEngine } from './modules/crawler/crawler.service';
 import { friendsRouter } from './modules/friends/friends.routes';
+import { placesRouter } from './modules/places/places.routes';
+import { profileRouter } from './modules/profile/profile.routes';
+import { chatRouter } from './modules/chat/chat.routes';
 
 // 5. Mount API Routes
 app.use('/api/auth', authRouter);
@@ -66,6 +69,9 @@ app.use('/api/activities', activitiesRouter);
 app.use('/api/ai', viviRouter);
 app.use('/api/crawler', crawlerRouter);
 app.use('/api/friends', friendsRouter);
+app.use('/api/places', placesRouter);
+app.use('/api/profile', profileRouter);
+app.use('/api/chat', chatRouter);
 
 // 6. Global Centralized Error Handler
 app.use(errorHandler);

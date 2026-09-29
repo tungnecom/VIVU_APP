@@ -15,10 +15,12 @@ import { BottomTabBar } from '../../components/BottomTabBar';
 import { MOCK_ACTIVITY } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
 import { ApiClient } from '../../services/api';
+import { useActivityStore } from '../../stores/activityStore';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 interface MatchHomeProps {
-  onNavigate: (screen: ScreenKey) => void;
+  onNavigate: (screen: ScreenKey, params?: any) => void;
 }
 
 export const MatchHomeScreen: React.FC<MatchHomeProps> = ({ onNavigate }) => {
@@ -26,6 +28,9 @@ export const MatchHomeScreen: React.FC<MatchHomeProps> = ({ onNavigate }) => {
   const [activeCategory, setActiveCategory] = useState('Ăn uống');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const selectedCity = useAuthStore((state) => state.selectedCity) || 'Đà Nẵng';
+  const activities = useActivityStore((state) => state.activities);
+  const fetchActivities = useActivityStore((state) => state.fetchActivities);
 
   // AI Matchmaking candidates
   const [candidates, setCandidates] = useState<any[]>([
@@ -153,6 +158,7 @@ export const MatchHomeScreen: React.FC<MatchHomeProps> = ({ onNavigate }) => {
           ApiClient.getMatchmakingCandidates(),
           ApiClient.getFriends(),
           ApiClient.getFriendRequests(),
+          fetchActivities(selectedCity, activeCategory),
         ]);
 
         if (candidatesRes?.data && Array.isArray(candidatesRes.data) && candidatesRes.data.length > 0) {
@@ -400,69 +406,73 @@ export const MatchHomeScreen: React.FC<MatchHomeProps> = ({ onNavigate }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Activity Card 1 */}
-            <TouchableOpacity
-              style={styles.matchCard}
-              activeOpacity={0.9}
-              onPress={() => onNavigate('activity_detail')}
-            >
-              <View style={styles.cardImageWrap}>
-                <Image source={{ uri: MOCK_ACTIVITY.image }} style={styles.cardImage} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.65)']}
-                  style={styles.gradientOverlay}
-                />
-                <View style={styles.cardRatingBadge}>
-                  <Text style={styles.ratingText}>⭐ {MOCK_ACTIVITY.rating} (56)</Text>
-                </View>
-                <View style={styles.locationChip}>
-                  <Ionicons name="location" size={12} color="#FFF" />
-                  <Text style={styles.locationChipText}>{MOCK_ACTIVITY.location}</Text>
-                </View>
-              </View>
-
-              <View style={styles.cardBody}>
-                <Text style={styles.cardTitle}>{MOCK_ACTIVITY.title}</Text>
-                <Text style={styles.cardTime}>
-                  📅 {MOCK_ACTIVITY.date} • {MOCK_ACTIVITY.time}
-                </Text>
-
-                <View style={styles.cardTagsRow}>
-                  {MOCK_ACTIVITY.tags.map((t, i) => (
-                    <View key={i} style={styles.tagBadge}>
-                      <Text style={styles.tagText}>{t}</Text>
+            {/* Activity List */}
+            {activities.length > 0 ? (
+              activities.map((activity: any) => (
+                <TouchableOpacity
+                  key={activity.id}
+                  style={styles.matchCard}
+                  activeOpacity={0.9}
+                  onPress={() => onNavigate('activity_detail' as ScreenKey, { id: activity.id })}
+                >
+                  <View style={styles.cardImageWrap}>
+                    <Image source={{ uri: activity.image || MOCK_ACTIVITY.image }} style={styles.cardImage} />
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.65)']}
+                      style={styles.gradientOverlay}
+                    />
+                    <View style={styles.cardRatingBadge}>
+                      <Text style={styles.ratingText}>⭐ {activity.host?.trustScore > 80 ? '5.0' : '4.5'} ({activity.requestsCount} y/c)</Text>
                     </View>
-                  ))}
-                </View>
+                    <View style={styles.locationChip}>
+                      <Ionicons name="location" size={12} color="#FFF" />
+                      <Text style={styles.locationChipText}>{activity.location || activity.city}</Text>
+                    </View>
+                  </View>
 
-                <View style={styles.cardFooter}>
-                  <TouchableOpacity
-                    style={styles.participantsRow}
-                    onPress={() => onNavigate('participant_list')}
-                  >
-                    <View style={styles.avatarStack}>
-                      {MOCK_ACTIVITY.participants.slice(0, 3).map((p, pIdx) => (
-                        <Image
-                          key={p.id}
-                          source={{ uri: p.avatar }}
-                          style={[styles.stackAvatar, { left: pIdx * 16 }]}
-                        />
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>{activity.title}</Text>
+                    <Text style={styles.cardTime}>
+                      📅 {activity.date} • {activity.time}
+                    </Text>
+
+                    <View style={styles.cardTagsRow}>
+                      {[activity.category, ...(activity.tags || [])].map((t: string, i: number) => (
+                        <View key={i} style={styles.tagBadge}>
+                          <Text style={styles.tagText}>{t}</Text>
+                        </View>
                       ))}
                     </View>
-                    <Text style={styles.participantsText}>
-                      {MOCK_ACTIVITY.joinedCount}/{MOCK_ACTIVITY.maxCount} tham gia
-                    </Text>
-                  </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.joinBtn}
-                    onPress={() => onNavigate('activity_detail')}
-                  >
-                    <Text style={styles.joinBtnText}>Xem chi tiết</Text>
-                  </TouchableOpacity>
-                </View>
+                    <View style={styles.cardFooter}>
+                      <TouchableOpacity
+                        style={styles.participantsRow}
+                        onPress={() => onNavigate('participant_list' as ScreenKey)}
+                      >
+                        <View style={styles.avatarStack}>
+                          {/* Mocking participants avatars for now */}
+                          <Image source={{ uri: activity.host?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' }} style={[styles.stackAvatar, { left: 0 }]} />
+                        </View>
+                        <Text style={styles.participantsText}>
+                          {activity.joinedCount}/{activity.maxCount} tham gia
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.joinBtn}
+                        onPress={() => onNavigate('activity_detail' as ScreenKey, { id: activity.id })}
+                      >
+                        <Text style={styles.joinBtnText}>Xem chi tiết</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: '#6B7280' }}>Chưa có chuyến đi nào ở khu vực này.</Text>
               </View>
-            </TouchableOpacity>
+            )}
           </>
         )}
 

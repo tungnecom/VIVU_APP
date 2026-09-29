@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { MOCK_POSTS } from '../constants/mockData';
+
 import { ApiClient } from '../services/api';
 import { PostItem } from '../types';
 
@@ -24,7 +24,7 @@ interface FeedState {
 const initialLiked = { p2: true };
 
 export const useFeedStore = create<FeedState>((set, get) => ({
-  posts: MOCK_POSTS,
+  posts: [],
   selectedPostId: null,
   likedPostIds: initialLiked,
   likedPosts: initialLiked,
@@ -43,7 +43,13 @@ export const useFeedStore = create<FeedState>((set, get) => ({
     try {
       const res = await ApiClient.getFeed(category);
       if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        set({ posts: res.data });
+        set((state) => {
+          // Preserve local optimistic posts that haven't been saved to backend yet
+          const localPosts = state.posts.filter((p) => p.id.startsWith('post_'));
+          // Filter out duplicates from API just in case
+          const apiPosts = res.data.filter((apiP: any) => !localPosts.find((lp) => lp.id === apiP.id));
+          return { posts: [...localPosts, ...apiPosts] };
+        });
       }
     } catch {
       // Fallback

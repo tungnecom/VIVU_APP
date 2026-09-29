@@ -14,6 +14,7 @@ import { Header } from '../../components/Header';
 import { MOCK_ACTIVITY } from '../../constants/mockData';
 import { COLORS, SHADOWS } from '../../constants/theme';
 import { useActivityStore } from '../../stores/activityStore';
+import { useAuthStore } from '../../stores/authStore';
 import { ScreenKey } from '../../types';
 
 
@@ -26,16 +27,28 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
   const [hasCheckedIn, setHasCheckedIn] = useState(false);
   const isJoined = useActivityStore((state) => state.isJoined);
   const toggleJoinActivity = useActivityStore((state) => state.toggleJoinActivity);
-  const activity = useActivityStore((state) => state.currentActivity);
+  const activity = useActivityStore((state) => state.currentActivity) || MOCK_ACTIVITY;
+  const joinActivity = useActivityStore((state) => state.joinActivity);
+  const token = useAuthStore((state) => state.token);
 
-  const handleJoin = () => {
-    toggleJoinActivity();
-    Alert.alert(
-      isJoined ? 'Đã hủy tham gia' : 'Thành công!',
-      isJoined
-        ? 'Bạn đã rời khỏi hoạt động này.'
-        : `Bạn đã đăng ký tham gia "${activity.title}"! Hãy chuẩn bị đúng giờ nhé 🎉`
-    );
+  const handleJoin = async () => {
+    if (isJoined) {
+      toggleJoinActivity();
+      Alert.alert('Đã hủy tham gia', 'Bạn đã hủy yêu cầu tham gia.');
+      return;
+    }
+
+    if (token && activity.id) {
+      const res = await joinActivity(activity.id, token, 'Cho mình tham gia với nhé!');
+      if (res.success) {
+        toggleJoinActivity();
+        Alert.alert('Thành công!', 'Đã gửi yêu cầu tham gia, chờ chủ kèo duyệt nhé 🎉');
+      } else {
+        Alert.alert('Lỗi', res.message || 'Không thể tham gia.');
+      }
+    } else {
+      Alert.alert('Lỗi', 'Vui lòng đăng nhập.');
+    }
   };
 
   const handleCheckIn = () => {
@@ -67,26 +80,26 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Banner Image */}
         <View style={styles.bannerContainer}>
-          <Image source={{ uri: MOCK_ACTIVITY.image }} style={styles.bannerImage} />
+          <Image source={{ uri: activity.image }} style={styles.bannerImage} />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.7)']}
             style={styles.bannerOverlay}
           />
           <View style={styles.bannerBadge}>
-            <Text style={styles.bannerBadgeText}>⭐ {MOCK_ACTIVITY.rating} (56 đánh giá)</Text>
+            <Text style={styles.bannerBadgeText}>⭐ {activity.rating} (56 đánh giá)</Text>
           </View>
         </View>
 
         {/* Title & Info Card */}
         <View style={styles.infoCard}>
-          <Text style={styles.activityTitle}>{MOCK_ACTIVITY.title}</Text>
+          <Text style={styles.activityTitle}>{activity.title}</Text>
 
           <View style={styles.metaGrid}>
             <View style={styles.metaItem}>
               <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
               <View>
                 <Text style={styles.metaLabel}>Thời gian</Text>
-                <Text style={styles.metaValue}>{MOCK_ACTIVITY.time}</Text>
+                <Text style={styles.metaValue}>{activity.time}</Text>
               </View>
             </View>
 
@@ -97,7 +110,7 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
               <Ionicons name="location-outline" size={18} color={COLORS.primary} />
               <View>
                 <Text style={styles.metaLabel}>Địa điểm</Text>
-                <Text style={styles.metaValue}>{MOCK_ACTIVITY.location} ↗</Text>
+                <Text style={styles.metaValue}>{activity.location} ↗</Text>
               </View>
             </TouchableOpacity>
 
@@ -109,7 +122,7 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
               <View>
                 <Text style={styles.metaLabel}>Số người</Text>
                 <Text style={styles.metaValue}>
-                  {MOCK_ACTIVITY.joinedCount + (isJoined ? 1 : 0)}/{MOCK_ACTIVITY.maxCount} thành viên
+                  {activity.joinedCount + (isJoined ? 1 : 0)}/{activity.maxCount} thành viên
                 </Text>
               </View>
             </TouchableOpacity>
@@ -120,14 +133,14 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
             style={styles.hostCard}
             onPress={() => onNavigate('profile')}
           >
-            <Image source={{ uri: MOCK_ACTIVITY.host.avatar }} style={styles.hostAvatar} />
+            <Image source={{ uri: activity.host?.avatarUrl || activity.host?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' }} style={styles.hostAvatar} />
             <View style={styles.hostInfo}>
               <Text style={styles.hostRole}>Tổ chức bởi</Text>
-              <Text style={styles.hostName}>{MOCK_ACTIVITY.host.name}</Text>
+              <Text style={styles.hostName}>{activity.host?.name || 'Vivu User'}</Text>
             </View>
             <View style={styles.trustBadge}>
               <Ionicons name="shield-checkmark" size={14} color={COLORS.primary} />
-              <Text style={styles.trustScore}>{MOCK_ACTIVITY.host.trustScore} điểm uy tín</Text>
+              <Text style={styles.trustScore}>{activity.host?.trustScore || 0} điểm uy tín</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -147,7 +160,7 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
             onPress={() => setActiveTab('members')}
           >
             <Text style={[styles.tabText, activeTab === 'members' && styles.tabTextActive]}>
-              Người tham gia ({MOCK_ACTIVITY.participants.length})
+              Người tham gia ({(activity.participants || []).length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -161,11 +174,11 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
         {/* Tab Content */}
         {activeTab === 'desc' ? (
           <View style={styles.tabContent}>
-            <Text style={styles.descParagraph}>{MOCK_ACTIVITY.description}</Text>
+            <Text style={styles.descParagraph}>{activity.description}</Text>
 
             {/* Tags */}
             <View style={styles.tagsWrap}>
-              {MOCK_ACTIVITY.tags.map((t, i) => (
+              {(activity.tags || []).map((t: any, i: number) => (
                 <View key={i} style={styles.tagBadge}>
                   <Text style={styles.tagText}>#{t}</Text>
                 </View>
@@ -195,15 +208,15 @@ export const ActivityDetailScreen: React.FC<ActivityDetailProps> = ({ onNavigate
           </View>
         ) : (
           <View style={styles.tabContent}>
-            {MOCK_ACTIVITY.participants.map((p) => (
-              <View key={p.id} style={styles.memberItem}>
-                <Image source={{ uri: p.avatar }} style={styles.memberAvatar} />
+            {(activity.participants || []).map((p: any) => (
+              <View key={p.userId || p.id} style={styles.memberItem}>
+                <Image source={{ uri: p.avatarUrl || p.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' }} style={styles.memberAvatar} />
                 <View style={styles.memberInfo}>
                   <Text style={styles.memberName}>{p.name}</Text>
                   <Text style={styles.memberRole}>{p.role || 'Thành viên'}</Text>
                 </View>
                 <View style={styles.memberTrustBadge}>
-                  <Text style={styles.memberTrustText}>{p.trustScore} điểm</Text>
+                  <Text style={styles.memberTrustText}>{p.trustScore || 85} điểm</Text>
                 </View>
               </View>
             ))}

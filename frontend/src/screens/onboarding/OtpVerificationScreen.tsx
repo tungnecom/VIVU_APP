@@ -73,8 +73,9 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
   const handleResend = async () => {
     if (countdown > 0) return;
     setLoading(true);
+    const token = useAuthStore.getState().token;
     try {
-      const res = await ApiClient.sendSmsOtp(phoneNumber);
+      const res = await ApiClient.sendSmsOtp(phoneNumber, token || '');
       if (res?.code) {
         setCurrentOtpCode(res.code);
       }
@@ -109,8 +110,9 @@ export const OtpVerificationScreen: React.FC<OtpProps> = ({ onNavigate }) => {
     }
 
     setLoading(true);
+    const token = useAuthStore.getState().token;
     try {
-      await ApiClient.verifySmsOtp(otpToVerify, phoneNumber);
+      await ApiClient.verifySmsOtp(otpToVerify, phoneNumber, token || '');
       setVerifiedSuccess(true);
 
       // Instantly update user profile with verified phone

@@ -13,18 +13,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabBar } from '../../components/BottomTabBar';
 import { ViViMascotModal } from '../../components/ViViMascotModal';
-import { CURRENT_USER, MOCK_ACTIVITY, MOCK_POSTS } from '../../constants/mockData';
+
 import { COLORS, SHADOWS } from '../../constants/theme';
 import { ScreenKey } from '../../types';
 import { Video, ResizeMode } from '../../utils/safeAV';
 
 interface HomeFeedProps {
-  onNavigate: (screen: ScreenKey) => void;
+  onNavigate: (screen: ScreenKey, params?: any) => void;
   onOpenQuickSwitcher: () => void;
 }
 
 import { useAuthStore } from '../../stores/authStore';
 import { useFeedStore } from '../../stores/feedStore';
+import { useActivityStore } from '../../stores/activityStore';
 
 export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   onNavigate,
@@ -41,6 +42,8 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
   const activeCategory = useFeedStore((state) => state.activeCategory);
   const setActiveCategory = useFeedStore((state) => state.setActiveCategory);
   const fetchPosts = useFeedStore((state) => state.fetchPosts);
+  const activities = useActivityStore((state) => state.activities);
+  const fetchActivities = useActivityStore((state) => state.fetchActivities);
 
   const toggleVideoMute = (postId: string) => {
     setMutedVideos((prev) => ({
@@ -83,11 +86,17 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
 
   useEffect(() => {
     fetchPosts(activeCategory);
+    fetchActivities(selectedCity, activeCategory);
   }, []);
 
 
   const selectedCity = useAuthStore((state) => state.selectedCity);
-  const currentUser = useAuthStore((state) => state.user) || CURRENT_USER;
+  const currentUser = useAuthStore((state) => state.user) || {
+    id: 'guest',
+    name: 'Khách',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+    trustScore: 0,
+  };
 
   const categories = [
     { name: 'Ăn uống', icon: 'restaurant-outline' },
@@ -208,63 +217,67 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
         </ScrollView>
 
         {/* Section: Hoạt động phù hợp với bạn */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Hoạt động phù hợp với bạn</Text>
-          <TouchableOpacity onPress={() => onNavigate('match_home')}>
-            <Text style={styles.seeAllText}>Xem tất cả &gt;</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Activity Card */}
-        <TouchableOpacity
-          style={styles.activityCard}
-          activeOpacity={0.9}
-          onPress={() => onNavigate('activity_detail')}
-        >
-          <Image
-            source={{ uri: MOCK_ACTIVITY.image }}
-            style={styles.activityImage}
-          />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.7)']}
-            style={styles.activityGradient}
-          />
-          <View style={styles.activityBadge}>
-            <Text style={styles.activityBadgeText}>⭐ {MOCK_ACTIVITY.rating}</Text>
-          </View>
-
-          <View style={styles.activityContent}>
-            <Text style={styles.activityTitle}>{MOCK_ACTIVITY.title}</Text>
-            <View style={styles.activityMetaRow}>
-              <View style={styles.metaItem}>
-                <Ionicons name="time-outline" size={13} color="#FFFFFF" />
-                <Text style={styles.metaText}>{MOCK_ACTIVITY.time}</Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="people-outline" size={13} color="#FFFFFF" />
-                <Text style={styles.metaText}>
-                  {MOCK_ACTIVITY.joinedCount}/{MOCK_ACTIVITY.maxCount} người
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.activityFooter}>
-              <View style={styles.hostRow}>
-                <Image
-                  source={{ uri: MOCK_ACTIVITY.host.avatar }}
-                  style={styles.hostAvatar}
-                />
-                <Text style={styles.hostName}>{MOCK_ACTIVITY.host.name}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.joinBtn}
-                onPress={() => onNavigate('activity_detail')}
-              >
-                <Text style={styles.joinBtnText}>Tham gia</Text>
+        {activities && activities.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Hoạt động phù hợp với bạn</Text>
+              <TouchableOpacity onPress={() => onNavigate('match_home' as ScreenKey)}>
+                <Text style={styles.seeAllText}>Xem tất cả &gt;</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </TouchableOpacity>
+
+            {/* Activity Card */}
+            <TouchableOpacity
+              style={styles.activityCard}
+              activeOpacity={0.9}
+              onPress={() => onNavigate('activity_detail' as ScreenKey, { id: activities[0].id })}
+            >
+              <Image
+                source={{ uri: activities[0].image || 'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=800' }}
+                style={styles.activityImage}
+              />
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.7)']}
+                style={styles.activityGradient}
+              />
+              <View style={styles.activityBadge}>
+                <Text style={styles.activityBadgeText}>⭐ {activities[0].host?.trustScore > 80 ? '5.0' : '4.5'}</Text>
+              </View>
+
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>{activities[0].title}</Text>
+                <View style={styles.activityMetaRow}>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="time-outline" size={13} color="#FFFFFF" />
+                    <Text style={styles.metaText}>{activities[0].time}</Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="people-outline" size={13} color="#FFFFFF" />
+                    <Text style={styles.metaText}>
+                      {activities[0].joinedCount}/{activities[0].maxCount} người
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.activityFooter}>
+                  <View style={styles.hostRow}>
+                    <Image
+                      source={{ uri: activities[0].host?.avatarUrl || activities[0].host?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' }}
+                      style={styles.hostAvatar}
+                    />
+                    <Text style={styles.hostName}>{activities[0].host?.name || 'Vivu User'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.joinBtn}
+                    onPress={() => onNavigate('activity_detail' as ScreenKey, { id: activities[0].id })}
+                  >
+                    <Text style={styles.joinBtnText}>Tham gia</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
 
         {/* Section: Mọi người đang nói gì? */}
         <View style={styles.sectionHeader}>
@@ -275,7 +288,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
         </View>
 
         {/* Post Cards */}
-        {posts.map((post) => {
+        {posts.filter(p => !p.isRecruitment).map((post) => {
           const isLiked = likedPostIds[post.id] ?? false;
           const isMuted = mutedVideos[post.id] ?? false;
 
@@ -385,7 +398,7 @@ export const HomeFeedScreen: React.FC<HomeFeedProps> = ({
                         <Ionicons name="time" size={14} color={COLORS.primary} />
                         <Text style={styles.tripDetailText}>{post.activitySnippet.time}</Text>
                       </View>
-                      {post.activitySnippet.budget && (
+                      {!!post.activitySnippet.budget && (
                         <View style={styles.tripDetailRow}>
                           <Ionicons name="wallet" size={14} color="#10B981" />
                           <Text style={styles.tripDetailText}>{post.activitySnippet.budget}</Text>

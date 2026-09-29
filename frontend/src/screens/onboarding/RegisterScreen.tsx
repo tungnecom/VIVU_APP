@@ -43,27 +43,34 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
     }
     setActivePhone(rawId);
     setLoading(true);
+    // Register via API
     try {
-      const res = await ApiClient.sendSmsOtp(rawId);
-      if (res?.code) {
-        setCurrentOtpCode(res.code);
+      const res = await ApiClient.register(rawId, password);
+      if (res?.success && res?.data?.token) {
+        // Successfully created user
+        const fakeUser = {
+          id: 'temp',
+          name: rawId.split('@')[0],
+          identifier: rawId,
+          phone: rawId,
+          city: 'Đà Nẵng',
+          trustScore: 100,
+        };
+        await login(res.data.token, fakeUser as any);
+        
+        // Cần OTP nếu là SĐT (giả định)
+        if (/^(0|\+84)[0-9]{8,10}$/.test(rawId)) {
+          const otpRes = await ApiClient.sendSmsOtp(rawId, res.data.token);
+          if (otpRes?.code) setCurrentOtpCode(otpRes.code);
+          onNavigate('otp');
+        } else {
+          onNavigate('city_select');
+        }
+      } else {
+        Alert.alert('Lỗi đăng ký', res?.message || 'Có lỗi xảy ra.');
       }
-      const currentUser = useAuthStore.getState().user;
-      if (currentUser) {
-        useAuthStore.setState({ user: { ...currentUser, identifier: rawId, phone: rawId } });
-      }
-      Alert.alert(
-        'Mã Xác Thực OTP 📲',
-        `Mã OTP xác thực gửi về ${rawId} là: [ ${res?.code || '868686'} ]\n(Mã có hiệu lực trong 60 giây)`,
-        [
-          {
-            text: 'Nhập mã ngay',
-            onPress: () => onNavigate('otp'),
-          },
-        ]
-      );
-    } catch {
-      onNavigate('otp');
+    } catch (error: any) {
+      Alert.alert('Lỗi', 'Lỗi kết nối.');
     } finally {
       setLoading(false);
     }

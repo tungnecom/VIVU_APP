@@ -1,15 +1,20 @@
 import { Request, Response, Router } from 'express';
 import { FriendsService } from './friends.service';
+import { authenticateJwt } from '../../middlewares/auth.middleware';
 
 export const friendsRouter = Router();
+
+// Bắt buộc đăng nhập cho mọi tính năng bạn bè
+friendsRouter.use(authenticateJwt);
 
 /**
  * GET /api/friends
  * Lấy danh sách bạn bè chính thức của người dùng
  */
-friendsRouter.get('/', async (req: Request, res: Response) => {
+friendsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const friends = await FriendsService.getFriends();
+    const userId = req.user!.userId;
+    const friends = await FriendsService.getFriends(userId);
     res.json({
       success: true,
       total: friends.length,
@@ -24,9 +29,10 @@ friendsRouter.get('/', async (req: Request, res: Response) => {
  * GET /api/friends/requests
  * Lấy danh sách lời mời kết bạn đang chờ duyệt
  */
-friendsRouter.get('/requests', async (req: Request, res: Response) => {
+friendsRouter.get('/requests', async (req: Request, res: Response): Promise<void> => {
   try {
-    const requests = await FriendsService.getPendingRequests();
+    const userId = req.user!.userId;
+    const requests = await FriendsService.getPendingRequests(userId);
     res.json({
       success: true,
       total: requests.length,
@@ -41,11 +47,11 @@ friendsRouter.get('/requests', async (req: Request, res: Response) => {
  * POST /api/friends/request/:targetUserId
  * Gửi lời mời kết bạn kèm ghi chú
  */
-friendsRouter.post('/request/:targetUserId', async (req: Request, res: Response) => {
+friendsRouter.post('/request/:targetUserId', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user!.userId;
     const targetUserId = String(req.params.targetUserId);
-    const { message } = req.body;
-    const result = await FriendsService.sendFriendRequest(targetUserId, message);
+    const result = await FriendsService.sendFriendRequest(userId, targetUserId);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
@@ -56,11 +62,16 @@ friendsRouter.post('/request/:targetUserId', async (req: Request, res: Response)
  * PUT /api/friends/respond/:requestId
  * Phản hồi lời mời kết bạn (Chấp nhận hoặc Từ chối)
  */
-friendsRouter.put('/respond/:requestId', async (req: Request, res: Response) => {
+friendsRouter.put('/respond/:requestId', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user!.userId;
     const requestId = String(req.params.requestId);
     const { action } = req.body; // 'ACCEPT' | 'DECLINE'
-    const result = await FriendsService.respondToRequest(requestId, action);
+    if (action !== 'ACCEPT' && action !== 'DECLINE') {
+      res.status(400).json({ success: false, message: 'Action phải là ACCEPT hoặc DECLINE' });
+      return;
+    }
+    const result = await FriendsService.respondToRequest(userId, requestId, action);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
@@ -71,10 +82,11 @@ friendsRouter.put('/respond/:requestId', async (req: Request, res: Response) => 
  * DELETE /api/friends/:friendId
  * Hủy kết bạn
  */
-friendsRouter.delete('/:friendId', async (req: Request, res: Response) => {
+friendsRouter.delete('/:friendId', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user!.userId;
     const friendId = String(req.params.friendId);
-    const result = await FriendsService.removeFriend(friendId);
+    const result = await FriendsService.removeFriend(userId, friendId);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
@@ -85,12 +97,13 @@ friendsRouter.delete('/:friendId', async (req: Request, res: Response) => {
  * GET /api/friends/search
  * Tìm kiếm bạn bè đa tiêu chí
  */
-friendsRouter.get('/search', async (req: Request, res: Response) => {
+friendsRouter.get('/search', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user!.userId;
     const query = (req.query.q as string) || '';
     const city = req.query.city as string;
     const interest = req.query.interest as string;
-    const users = await FriendsService.searchUsers(query, city, interest);
+    const users = await FriendsService.searchUsers(userId, query, city, interest);
     res.json({
       success: true,
       total: users.length,
@@ -105,10 +118,11 @@ friendsRouter.get('/search', async (req: Request, res: Response) => {
  * GET /api/friends/suggestions
  * Gợi ý bạn bè phù hợp dựa trên thuật toán AI Matchmaking
  */
-friendsRouter.get('/suggestions', async (req: Request, res: Response) => {
+friendsRouter.get('/suggestions', async (req: Request, res: Response): Promise<void> => {
   try {
+    const userId = req.user!.userId;
     const city = (req.query.city as string) || 'Đà Nẵng';
-    const suggestions = await FriendsService.getSuggestedBuddies(city);
+    const suggestions = await FriendsService.getSuggestedBuddies(userId, city);
     res.json({
       success: true,
       total: suggestions.length,

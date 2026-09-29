@@ -49,7 +49,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     try {
       // If user typed phone number: trigger quick OTP
       if (isPhone) {
-        const res = await ApiClient.sendSmsOtp(rawId);
+        const res = await ApiClient.sendSmsOtp(rawId, '');
         if (res?.code) {
           setCurrentOtpCode(res.code);
         }
@@ -71,22 +71,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
       }
 
       // Email/password regular login
-      const dummyUser = {
-        id: 'u_' + Date.now(),
-        name: rawId.split('@')[0] || 'VIVU Explorer',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
-        identifier: rawId,
-        phone: rawId,
-        trustScore: 85,
-        rating: 4.9,
-        reviewCount: 24,
-        joinDate: '01/2025',
-        badges: ['Cạ cứng du lịch', 'Thổ địa sành ăn'],
-      };
-      await login('vivu_token_' + Date.now(), dummyUser as any);
-      onNavigate('home_feed');
-    } catch {
-      onNavigate('home_feed');
+      const res = await ApiClient.login(rawId, password);
+      
+      if (res?.success && res?.data?.token) {
+        await login(res.data.token, res.data.user);
+        onNavigate('home_feed');
+      } else {
+        Alert.alert('Đăng nhập thất bại', res?.message || 'Vui lòng kiểm tra lại thông tin.');
+      }
+    } catch (error: any) {
+      Alert.alert('Lỗi', 'Lỗi hệ thống');
     } finally {
       setLoading(false);
     }
@@ -102,7 +96,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     setActivePhone(phone);
     setLoading(true);
     try {
-      const res = await ApiClient.sendSmsOtp(phone);
+      const res = await ApiClient.sendSmsOtp(phone, '');
       if (res?.code) {
         setCurrentOtpCode(res.code);
       }
